@@ -1,0 +1,277 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  directUrl    = env("DIRECT_URL")
+  relationMode = "prisma"
+  schemas      = ["public"]
+}
+
+model User {
+  userId             Int                @id @default(autoincrement())
+  username           String             @unique
+  email              String             @unique
+  passwordHash       String             @map("password_hash")
+  fullName           String?            @map("full_name")
+  avatarUrl          String?            @map("avatar_url")
+  currentLevel       Int                @default(1) @map("current_level")
+  totalPoints        Int                @default(0) @map("total_points")
+  streakDays         Int                @default(0) @map("streak_days")
+  lastActiveDate     DateTime?          @map("last_active_date")
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @default(now()) @map("updated_at") @db.Timestamptz(6)
+  userAchievements   UserAchievement[]
+  userActivities     UserActivity[]
+  userProgress       UserProgress[]
+  leaderboardEntries LeaderboardEntry[]
+
+  @@map("users")
+  @@schema("public")
+}
+
+model Level {
+  levelId        Int     @id @default(autoincrement()) @map("level_id")
+  levelNumber    Int     @unique @map("level_number")
+  levelName      String  @map("level_name")
+  pointsRequired Int     @map("points_required")
+  description    String?
+  badgeUrl       String? @map("badge_url")
+
+  @@map("levels")
+  @@schema("public")
+}
+
+model Achievement {
+  achievementId     Int               @id @default(autoincrement()) @map("achievement_id")
+  title             String
+  description       String
+  iconUrl           String?           @map("icon_url")
+  requiredCondition String?           @map("required_condition")
+  pointsReward      Int               @default(0) @map("points_reward")
+  userAchievements  UserAchievement[]
+
+  @@map("achievements")
+  @@schema("public")
+}
+
+model UserAchievement {
+  userId        Int         @map("user_id")
+  achievementId Int         @map("achievement_id")
+  dateAchieved  DateTime    @default(now()) @map("date_achieved") @db.Timestamptz(6)
+  user          User        @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [achievementId], onDelete: Cascade)
+
+  @@id([userId, achievementId])
+  @@index([achievementId])
+  @@map("user_achievements")
+  @@schema("public")
+}
+
+model VocabularyCategory {
+  categoryId      Int              @id @default(autoincrement()) @map("category_id")
+  categoryName    String           @map("category_name")
+  description     String?
+  iconUrl         String?          @map("icon_url")
+  difficultyLevel Int              @default(1) @map("difficulty_level")
+  orderIndex      Int?             @map("order_index")
+  vocabularyWords VocabularyWord[]
+  userProgress    UserProgress[]
+
+  @@map("vocabulary_categories")
+  @@schema("public")
+}
+
+model VocabularyWord {
+  wordId          Int                @id @default(autoincrement()) @map("word_id")
+  categoryId      Int                @map("category_id")
+  word            String
+  pronunciation   String?
+  partOfSpeech    String?            @map("part_of_speech")
+  definition      String
+  exampleSentence String?            @map("example_sentence")
+  imageUrl        String?            @map("image_url")
+  audioUrl        String?            @map("audio_url")
+  difficultyLevel Int                @default(1) @map("difficulty_level")
+  category        VocabularyCategory @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  gameQuestions   GameQuestion[]
+
+  @@index([categoryId])
+  @@map("vocabulary_words")
+  @@schema("public")
+}
+
+model GrammarTopic {
+  topicId         Int              @id @default(autoincrement()) @map("topic_id")
+  topicName       String           @map("topic_name")
+  description     String?
+  difficultyLevel Int              @default(1) @map("difficulty_level")
+  orderIndex      Int?             @map("order_index")
+  grammarContents GrammarContent[]
+  userProgress    UserProgress[]
+
+  @@map("grammar_topics")
+  @@schema("public")
+}
+
+model GrammarContent {
+  contentId     Int            @id @default(autoincrement()) @map("content_id")
+  topicId       Int            @map("topic_id")
+  title         String
+  explanation   String
+  examples      String?
+  notes         String?
+  orderIndex    Int?           @map("order_index")
+  topic         GrammarTopic   @relation(fields: [topicId], references: [topicId], onDelete: Cascade)
+  gameQuestions GameQuestion[]
+
+  @@index([topicId])
+  @@map("grammar_contents")
+  @@schema("public")
+}
+
+model GameType {
+  gameTypeId     Int            @id @default(autoincrement()) @map("game_type_id")
+  gameName       String         @map("game_name")
+  description    String?
+  iconUrl        String?        @map("icon_url")
+  instructions   String?
+  gameActivities GameActivity[]
+
+  @@map("game_types")
+  @@schema("public")
+}
+
+model GameActivity {
+  activityId       Int            @id @default(autoincrement()) @map("activity_id")
+  gameTypeId       Int            @map("game_type_id")
+  activityName     String         @map("activity_name")
+  description      String?
+  skillFocus       String?        @map("skill_focus")
+  difficultyLevel  Int            @default(1) @map("difficulty_level")
+  pointsReward     Int            @default(10) @map("points_reward")
+  timeLimitSeconds Int?           @map("time_limit_seconds")
+  instructions     String?
+  gameType         GameType       @relation(fields: [gameTypeId], references: [gameTypeId], onDelete: Cascade)
+  gameQuestions    GameQuestion[]
+  userActivities   UserActivity[]
+
+  @@index([gameTypeId])
+  @@map("game_activities")
+  @@schema("public")
+}
+
+model GameQuestion {
+  questionId       Int             @id @default(autoincrement()) @map("question_id")
+  activityId       Int             @map("activity_id")
+  questionType     String          @map("question_type")
+  questionText     String          @map("question_text")
+  correctAnswer    String          @map("correct_answer")
+  options          Json?
+  hint             String?
+  explanation      String?
+  difficultyLevel  Int             @default(1) @map("difficulty_level")
+  points           Int             @default(5)
+  mediaUrl         String?         @map("media_url")
+  relatedWordId    Int?            @map("related_word_id")
+  relatedGrammarId Int?            @map("related_grammar_id")
+  activity         GameActivity    @relation(fields: [activityId], references: [activityId], onDelete: Cascade)
+  vocabularyWord   VocabularyWord? @relation(fields: [relatedWordId], references: [wordId], onDelete: SetNull)
+  grammarContent   GrammarContent? @relation(fields: [relatedGrammarId], references: [contentId], onDelete: SetNull)
+  userAnswers      UserAnswer[]
+
+  @@index([activityId])
+  @@index([relatedWordId])
+  @@index([relatedGrammarId])
+  @@map("game_questions")
+  @@schema("public")
+}
+
+model UserActivity {
+  activityLogId    Int           @id @default(autoincrement()) @map("activity_log_id")
+  userId           Int           @map("user_id")
+  activityId       Int?          @map("activity_id")
+  startTime        DateTime      @default(now()) @map("start_time") @db.Timestamptz(6)
+  endTime          DateTime?     @map("end_time") @db.Timestamptz(6)
+  score            Int?
+  answersCorrect   Int           @default(0) @map("answers_correct")
+  answersWrong     Int           @default(0) @map("answers_wrong")
+  pointsEarned     Int           @default(0) @map("points_earned")
+  completionStatus String        @default("incomplete") @map("completion_status")
+  user             User          @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  activity         GameActivity? @relation(fields: [activityId], references: [activityId], onDelete: SetNull)
+  userAnswers      UserAnswer[]
+
+  @@index([userId])
+  @@index([activityId])
+  @@map("user_activities")
+  @@schema("public")
+}
+
+model UserAnswer {
+  answerId         Int           @id @default(autoincrement()) @map("answer_id")
+  activityLogId    Int           @map("activity_log_id")
+  questionId       Int?          @map("question_id")
+  userAnswer       String?       @map("user_answer")
+  isCorrect        Boolean?      @map("is_correct")
+  timeTakenSeconds Int?          @map("time_taken_seconds")
+  pointsEarned     Int           @default(0) @map("points_earned")
+  userActivity     UserActivity  @relation(fields: [activityLogId], references: [activityLogId], onDelete: Cascade)
+  gameQuestion     GameQuestion? @relation(fields: [questionId], references: [questionId], onDelete: SetNull)
+
+  @@index([activityLogId])
+  @@index([questionId])
+  @@map("user_answers")
+  @@schema("public")
+}
+
+model UserProgress {
+  progressId     Int                 @id @default(autoincrement()) @map("progress_id")
+  userId         Int                 @map("user_id")
+  categoryId     Int?                @map("category_id")
+  topicId        Int?                @map("topic_id")
+  masteryLevel   Decimal             @default(0) @map("mastery_level") @db.Decimal(5, 2)
+  timesPracticed Int                 @default(0) @map("times_practiced")
+  lastPracticed  DateTime?           @map("last_practiced") @db.Timestamptz(6)
+  nextReviewDate DateTime?           @map("next_review_date") @db.Timestamptz(6)
+  user           User                @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  category       VocabularyCategory? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  topic          GrammarTopic?       @relation(fields: [topicId], references: [topicId], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([topicId])
+  @@map("user_progress")
+  @@schema("public")
+}
+
+model Leaderboard {
+  leaderboardId Int                @id @default(autoincrement()) @map("leaderboard_id")
+  name          String
+  periodType    String             @map("period_type")
+  startDate     DateTime?          @map("start_date") @db.Date
+  endDate       DateTime?          @map("end_date") @db.Date
+  entries       LeaderboardEntry[]
+
+  @@map("leaderboards")
+  @@schema("public")
+}
+
+model LeaderboardEntry {
+  entryId       Int         @id @default(autoincrement()) @map("entry_id")
+  leaderboardId Int         @map("leaderboard_id")
+  userId        Int         @map("user_id")
+  score         Int
+  rank          Int?
+  updatedAt     DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [leaderboardId], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([leaderboardId, userId])
+  @@index([userId])
+  @@map("leaderboard_entries")
+  @@schema("public")
+}

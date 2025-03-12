@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 10% 94%;
+    --foreground: 358 97% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 358 97% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 358 97% 12%;
+
+    --primary: 343 56% 63%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 339 56% 38%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 42 10% 90%;
+    --muted-foreground: 358 10% 40%;
+
+    --accent: 358 97% 12%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 42 10% 85%;
+    --input: 42 10% 85%;
+    --ring: 343 56% 63%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 358 97% 12%;
+    --foreground: 42 10% 94%;
+
+    --card: 358 97% 12%;
+    --card-foreground: 42 10% 94%;
+
+    --popover: 358 97% 12%;
+    --popover-foreground: 42 10% 94%;
+
+    --primary: 343 56% 63%;
+    --primary-foreground: 358 97% 12%;
+
+    --secondary: 339 56% 38%;
+    --secondary-foreground: 358 97% 12%;
+
+    --muted: 358 50% 20%;
+    --muted-foreground: 42 10% 80%;
+
+    --accent: 42 10% 94%;
+    --accent-foreground: 358 97% 12%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 42 10% 94%;
+
+    --border: 358 50% 20%;
+    --input: 358 50% 20%;
+    --ring: 343 56% 63%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+.game-card {
+  @apply relative overflow-hidden rounded-xl border bg-white p-6 shadow-md transition-all hover:shadow-lg;
+}
+
+.game-card::before {
+  content: "";
+  @apply absolute -right-12 -top-12 h-24 w-24 rounded-full bg-game-secondary/20;
+}
+
+.game-card::after {
+  content: "";
+  @apply absolute -bottom-12 -left-12 h-24 w-24 rounded-full bg-game-primary/20;
+}
+
+.game-gradient-text {
+  @apply bg-gradient-to-r from-game-primary to-game-secondary bg-clip-text text-transparent;
+}
+
+.game-button {
+  @apply relative overflow-hidden rounded-lg bg-gradient-to-r from-game-primary to-game-secondary px-6 py-3 font-medium text-white transition-all hover:shadow-lg;
+}
+
+.game-button::after {
+  content: "";
+  @apply absolute inset-0 -z-10 bg-gradient-to-r from-game-secondary to-game-primary opacity-0 transition-opacity duration-300;
+}
+
+.game-button:hover::after {
+  @apply opacity-100;
+}
+
