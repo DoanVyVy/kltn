@@ -8,12 +8,18 @@ export async function GET(
 	{ params }: { params: { id: string } }
 ) {
 	const { id } = params;
-
-	return NextResponse.json(
-		await prisma.vocabularyCollection.findFirst({
-			where: {
-				id: parseInt(id),
-			},
-		})
-	);
+	const col = await prisma.vocabularyCollection.findFirst({
+		where: {
+			id: parseInt(id),
+		},
+	});
+	const totalWords = await prisma.collectionDetail.count({
+		where: {
+			collectionId: parseInt(id),
+		},
+	});
+	return NextResponse.json({
+		...col,
+		totalWords: totalWords,
+	});
 }

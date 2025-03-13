@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/navigation";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	CollectionDetail,
 	VocabularyCollection,
@@ -71,68 +72,38 @@ const floatAnimation = {
 };
 
 // Types
-interface Word {
-	id: number;
-	term: string;
-	definition: string;
-	type: string;
-	example: string;
-	pronunciation: string;
-	audioUrl: string;
-	incorrectAnswers: string[];
-}
-
-interface LessonData {
-	id: number;
-	courseId: number;
-	courseTitle: string;
-	sectionTitle: string;
-	totalWords: number;
-	words: Word[];
-}
-
-// Sample lesson data
-const lessonData: LessonData = {
-	id: 1,
-	courseId: 1,
-	courseTitle: "500 Từ vựng TOEIC cơ bản",
-	sectionTitle: "Chủ đề: Văn phòng và Công sở",
-	totalWords: 10,
-	words: [
-		{
-			id: 1,
-			term: "deadline",
-			definition: "thời hạn",
-			type: "n",
-			example: "We must meet the ____ for this project submission",
-			pronunciation: "/ˈdedlaɪn/",
-			audioUrl: "#",
-			incorrectAnswers: ["timeline", "schedule", "target"],
-		},
-		// Add more words as needed
-	],
-};
 
 export default function LearnVocabularyPage() {
 	const router = useRouter();
 	const params = useParams();
-	const [data, setData] = useState<
-		| (CollectionDetail & {
-				word: VocabularyWord;
-		  })[]
-		| null
-	>(null);
-	const [collection, setCollection] = useState<VocabularyCollection | null>(
-		null
-	);
-	React.useEffect(() => {
-		fetch(`/api/vocab_collection/${params.id}/flashcard`)
-			.then((res) => res.json())
-			.then(setData);
-		fetch(`/api/vocab_collection/${params.id}`)
-			.then((res) => res.json())
-			.then(setCollection);
-	}, [params.id]);
+	const { data, isLoading: isDataLoading } = useQuery<
+		(CollectionDetail & {
+			word: VocabularyWord;
+		})[]
+	>({
+		queryKey: ["vocabCollectionFlashcard", params.id],
+		queryFn: () =>
+			fetch(`/api/vocab_collection/${params.id}/flashcard`).then((res) =>
+				res.json()
+			),
+	});
+
+	const { data: collection, isLoading: isCollectionLoading } = useQuery<
+		VocabularyCollection & { totalWords: number }
+	>({
+		queryKey: ["vocabCollection", params.id],
+		queryFn: () =>
+			fetch(`/api/vocab_collection/${params.id}`).then((res) =>
+				res.json()
+			),
+	});
+	const { mutateAsync } = useMutation({
+		mutationFn: async ({ id, colId }: { id: string; colId: string }) => {
+			await fetch(`/api/vocab_collection/${id}/flashcard/${colId}`, {
+				method: "POST",
+			});
+		},
+	});
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 	const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
@@ -157,7 +128,7 @@ export default function LearnVocabularyPage() {
 	const currentWord = data?.[currentIndex];
 
 	useEffect(() => {
-		setProgress((currentIndex / lessonData.totalWords) * 100);
+		setProgress((currentIndex / (collection?.totalWords || 1)) * 100);
 	}, [currentIndex]);
 
 	const handleSelectAnswer = (answer: string) => {
@@ -177,6 +148,10 @@ export default function LearnVocabularyPage() {
 
 		// Auto advance after a delay if correct
 		if (correct) {
+			mutateAsync({
+				id: params.id as string,
+				colId: currentWord?.id.toString() || "",
+			});
 			setTimeout(() => {
 				handleNext();
 			}, 1500);
@@ -184,7 +159,7 @@ export default function LearnVocabularyPage() {
 	};
 
 	const handleNext = () => {
-		if (currentIndex < lessonData.words.length - 1) {
+		if (currentIndex < data!.length - 1) {
 			// Reset states
 			setSelectedAnswer(null);
 			setIsCorrect(null);
@@ -198,7 +173,7 @@ export default function LearnVocabularyPage() {
 			// Show celebration animation
 			setShowCelebration(true);
 			setTimeout(() => {
-				router.push(`/vocabulary/${lessonData.courseId}`);
+				router.push(`/vocabulary/${collection?.id}`);
 			}, 3000);
 		}
 	};
@@ -211,27 +186,12 @@ export default function LearnVocabularyPage() {
 		}, 2000);
 	};
 
-	// Get shuffled answer options
-	// const getAnswerOptions = () => {
-	// 	// Only shuffle once when the current word changes
-	// 	if (answerOptions.length === 0) {
-	// 		const options = [
-	// 			currentWord?.word?.word!,
-	// 			"hello",
-	// 			"world",
-	// 			"test",
-	// 		].sort(() => Math.random() - 0.5);
-	// 		setAnswerOptions(options);
-	// 		return options;
-	// 	}
-	// 	return answerOptions;
-	// };
-	// console.log(currentWord);
 	const validAnswerOptions = React.useMemo(() => {
 		if (!currentWord) return [];
-		return [currentWord.word.word, "hello", "world", "test"].sort(
-			() => Math.random() - 0.5
-		);
+		return [
+			currentWord.word.word,
+			...currentWord.inCorrectAnswers.slice(0, 3),
+		].sort(() => Math.random() - 0.5);
 	}, [currentWord]);
 
 	return (
@@ -255,7 +215,7 @@ export default function LearnVocabularyPage() {
 						variant="ghost"
 						className="gap-2 text-game-accent hover:bg-game-primary/10 rounded-full"
 						onClick={() =>
-							router.push(`/vocabulary/${lessonData.courseId}`)
+							router.push(`/vocabulary/${collection?.id}`)
 						}
 					>
 						<ArrowLeft className="h-4 w-4" />
@@ -264,10 +224,10 @@ export default function LearnVocabularyPage() {
 
 					<div className="text-right">
 						<h2 className="text-lg font-bold text-game-accent">
-							{lessonData.courseTitle}
+							{collection?.name}
 						</h2>
 						<p className="text-sm text-game-accent/70">
-							{lessonData.sectionTitle}
+							{collection?.totalWords} từ vựng
 						</p>
 					</div>
 				</motion.div>
@@ -275,7 +235,7 @@ export default function LearnVocabularyPage() {
 				<div className="mb-6 space-y-2">
 					<div className="flex justify-between text-sm">
 						<span className="text-game-accent font-medium">
-							Từ {currentIndex + 1}/{lessonData.totalWords}
+							Từ {currentIndex + 1}/{data?.length || 0}
 						</span>
 						<div className="flex gap-2">
 							<Badge className="bg-green-100 text-green-700 rounded-full px-3">
@@ -365,7 +325,7 @@ export default function LearnVocabularyPage() {
 									className="game-button w-full rounded-full text-lg py-6"
 									onClick={() =>
 										router.push(
-											`/vocabulary/${lessonData.courseId}`
+											`/vocabulary/${collection?.id}`
 										)
 									}
 								>

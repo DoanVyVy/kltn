@@ -288,11 +288,13 @@ model VocabularyCollection {
 }
 
 model CollectionDetail {
-  id           Int                  @id @default(autoincrement())
-  collectionId Int
-  wordId       Int
-  collection   VocabularyCollection @relation(fields: [collectionId], references: [id])
-  word         VocabularyWord       @relation(fields: [wordId], references: [wordId])
+  id                      Int                     @id @default(autoincrement())
+  collectionId            Int
+  wordId                  Int
+  collection              VocabularyCollection    @relation(fields: [collectionId], references: [id])
+  word                    VocabularyWord          @relation(fields: [wordId], references: [wordId])
+  inCorrectAnswers        String[]
+  userCollectionProcesses UserCollectionProcess[]
 
   @@index([wordId])
   @@index([collectionId])
@@ -300,14 +302,17 @@ model CollectionDetail {
 }
 
 model UserCollectionProcess {
-  id           Int                  @id @default(autoincrement())
-  userId       Int
-  collectionId Int
-  isCorrect    Boolean              @default(false)
-  user         User                 @relation(fields: [userId], references: [userId])
-  collection   VocabularyCollection @relation(fields: [collectionId], references: [id])
+  id                     Int                   @id @default(autoincrement())
+  userId                 Int
+  collectionDetailId     Int
+  isCorrect              Boolean               @default(false)
+  user                   User                  @relation(fields: [userId], references: [userId])
+  collectionDetail       CollectionDetail      @relation(fields: [collectionDetailId], references: [id])
+  vocabularyCollectionId Int?
+  VocabularyCollection   VocabularyCollection? @relation(fields: [vocabularyCollectionId], references: [id])
 
   @@index([userId])
-  @@index([collectionId])
+  @@index([collectionDetailId])
+  @@index([vocabularyCollectionId])
   @@schema("public")
 }

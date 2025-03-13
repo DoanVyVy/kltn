@@ -104,40 +104,6 @@ const vocabularyCourses = [
 ];
 
 // Dữ liệu mẫu cho các bộ từ vựng đang học
-const learningProgress = [
-	{
-		id: 1,
-		title: "500 Từ vựng TOEIC cơ bản",
-		progress: 25,
-		lastLearned: "Hôm nay",
-		dueWords: 15,
-		streak: 5,
-	},
-	{
-		id: 2,
-		title: "Từ vựng giao tiếp hàng ngày",
-		progress: 70,
-		lastLearned: "Hôm qua",
-		dueWords: 8,
-		streak: 12,
-	},
-	{
-		id: 3,
-		title: "Từ vựng học thuật",
-		progress: 12,
-		lastLearned: "3 ngày trước",
-		dueWords: 20,
-		streak: 0,
-	},
-	{
-		id: 6,
-		title: "Từ vựng du lịch",
-		progress: 72,
-		lastLearned: "Hôm nay",
-		dueWords: 5,
-		streak: 7,
-	},
-];
 
 export default function VocabularyPage() {
 	const router = useRouter();
@@ -158,7 +124,9 @@ export default function VocabularyPage() {
 				tag.toLowerCase().includes(searchQuery.toLowerCase())
 			)
 	);
-	const [data, setData] = useState<VocabularyCollection[]>([]);
+	const [data, setData] = useState<
+		(VocabularyCollection & { progress: number })[]
+	>([]);
 	console.log(data);
 	useEffect(() => {
 		fetch("/api/vocab_collection")
@@ -260,11 +228,11 @@ export default function VocabularyPage() {
 															Tiến độ
 														</span>
 														<span className="text-game-primary">
-															25%
+															{course.progress}%
 														</span>
 													</div>
 													<Progress
-														value={25}
+														value={course.progress}
 														className="h-2 bg-white"
 														indicatorClassName="bg-game-primary"
 													/>

@@ -11,14 +11,19 @@ Create a vocabulary list based on a given topic. The input is the name of the to
 
 'exampleSentence': '<sentence using the word>',
 
-'difficultyLevel': <number from 1 to 3>
+'difficultyLevel': <number from 1 to 3>,
+
+'samePronunciations': ['<word1>', '<word2>', ...] or [],
+'definition': '<definition>'
 
 }
 
-'word' is a vocabulary word related to the topic (single word, no spaces or special characters).
+'word' is a english vocabulary word related to the topic (single word only)
 'exampleSentence' is a clear, contextually appropriate sentence demonstrating the word's usage.
 'difficultyLevel' is an integer from 1 to 3, where 1 is easy, 2 is medium, and 3 is difficult, based on the word's complexity or common usage.
-Generate at least 5 words for the given topic. Ensure the words are relevant, varied in difficulty, and the sentences are natural and grammatically correct. The topic provided is:
+'samePronunciations' is an array listing words that have similar or identical pronunciation (homophones or near-homophones) but different meanings or spellings; if none exist, return a random words. At least 3 words.
+'definition' is a clear, concise definition of the word.
+Generate at least 5 words for the given topic. Ensure the words are relevant, varied in difficulty, the sentences are natural and grammatically correct, and the 'samePronunciations' field is accurately populated.
 `;
 
 function parseGeminiResponse(res: string): any {
@@ -53,7 +58,7 @@ for await (const topic of listTopics) {
 			.map((word: any) => ({
 				categoryId: 1,
 				word: word.word,
-				definition: word.exampleSentence,
+				definition: word.definition || word.exampleSentence,
 				exampleSentence: word.exampleSentence,
 				difficultyLevel: word.difficultyLevel,
 			}))
@@ -68,9 +73,12 @@ for await (const topic of listTopics) {
 				data: {
 					collectionId: topic.id,
 					wordId: data.wordId,
+					inCorrectAnswers:
+						words.find((word: any) => word.word === data.word)
+							?.samePronunciations || [],
 				},
 			});
 		})
 	);
-	await sleep(1000);
+	await sleep(500);
 }

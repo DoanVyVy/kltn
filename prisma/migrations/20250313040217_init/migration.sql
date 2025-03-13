@@ -212,6 +212,35 @@ CREATE TABLE "public"."leaderboard_entries" (
     CONSTRAINT "leaderboard_entries_pkey" PRIMARY KEY ("entry_id")
 );
 
+-- CreateTable
+CREATE TABLE "public"."VocabularyCollection" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "VocabularyCollection_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."CollectionDetail" (
+    "id" SERIAL NOT NULL,
+    "collectionId" INTEGER NOT NULL,
+    "wordId" INTEGER NOT NULL,
+    "inCorrectAnswers" TEXT[],
+
+    CONSTRAINT "CollectionDetail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."UserCollectionProcess" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "collectionDetailId" INTEGER NOT NULL,
+    "isCorrect" BOOLEAN NOT NULL DEFAULT false,
+    "vocabularyCollectionId" INTEGER,
+
+    CONSTRAINT "UserCollectionProcess_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_username_key" ON "public"."users"("username");
 
@@ -268,3 +297,18 @@ CREATE INDEX "leaderboard_entries_user_id_idx" ON "public"."leaderboard_entries"
 
 -- CreateIndex
 CREATE UNIQUE INDEX "leaderboard_entries_leaderboard_id_user_id_key" ON "public"."leaderboard_entries"("leaderboard_id", "user_id");
+
+-- CreateIndex
+CREATE INDEX "CollectionDetail_wordId_idx" ON "public"."CollectionDetail"("wordId");
+
+-- CreateIndex
+CREATE INDEX "CollectionDetail_collectionId_idx" ON "public"."CollectionDetail"("collectionId");
+
+-- CreateIndex
+CREATE INDEX "UserCollectionProcess_userId_idx" ON "public"."UserCollectionProcess"("userId");
+
+-- CreateIndex
+CREATE INDEX "UserCollectionProcess_collectionDetailId_idx" ON "public"."UserCollectionProcess"("collectionDetailId");
+
+-- CreateIndex
+CREATE INDEX "UserCollectionProcess_vocabularyCollectionId_idx" ON "public"."UserCollectionProcess"("vocabularyCollectionId");
