@@ -2099,6 +2099,21 @@
   dependencies:
     "@tanstack/query-core" "5.67.3"
 
+"@trpc/client@^11.0.0-rc.828":
+  version "11.0.0-rc.828"
+  resolved "https://registry.yarnpkg.com/@trpc/client/-/client-11.0.0-rc.828.tgz#d4c2e918c698bced2613c51fffb802019f189a85"
+  integrity sha512-pV2bELnPqH7S2R1wBH6OB7lOi61ELt8CEcvHuxVM2YhL4hP408tzKT0YvNBo4GVqc8So/1ncpXJyRJQG0o6rsQ==
+
+"@trpc/react-query@^11.0.0-rc.828":
+  version "11.0.0-rc.828"
+  resolved "https://registry.yarnpkg.com/@trpc/react-query/-/react-query-11.0.0-rc.828.tgz#dee1a670eef1b1c8def0dc88b5d4dd8ceb1b7513"
+  integrity sha512-oir4OikvCEqbheswHZhKrXSz1hKvFcDFlc/NZ9zShMlosJtO585az0XRrGuwFvjVShP5YCRvzFb4shiJjw5PXA==
+
+"@trpc/server@^11.0.0-rc.828":
+  version "11.0.0-rc.828"
+  resolved "https://registry.yarnpkg.com/@trpc/server/-/server-11.0.0-rc.828.tgz#857d14e83f24b5b932c7366b4597f44128703ed3"
+  integrity sha512-+dvcIcE5QPy52cz4rqwfUqk+WQDYAH3Xri+u2t0NdzIoo78fnL14if8oSZXAPU1bCmWGyR1k/0m5rSQ7AZaKlQ==
+
 "@types/bcryptjs@^2.4.6":
   version "2.4.6"
   resolved "https://registry.yarnpkg.com/@types/bcryptjs/-/bcryptjs-2.4.6.tgz#2b92e3c2121c66eba3901e64faf8bb922ec291fa"
@@ -2341,7 +2356,7 @@ class-variance-authority@^0.7.0:
   dependencies:
     clsx "^2.1.1"
 
-client-only@0.0.1:
+client-only@0.0.1, client-only@^0.0.1:
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/client-only/-/client-only-0.0.1.tgz#38bba5d403c41ab150bff64a95c85013cf73bca1"
   integrity sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==
@@ -3172,6 +3187,11 @@ scheduler@^0.23.2:
   dependencies:
     loose-envify "^1.1.0"
 
+server-only@^0.0.1:
+  version "0.0.1"
+  resolved "https://registry.yarnpkg.com/server-only/-/server-only-0.0.1.tgz#0f366bb6afb618c37c9255a314535dc412cd1c9e"
+  integrity sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==
+
 set-cookie-parser@^2.6.0:
   version "2.7.1"
   resolved "https://registry.yarnpkg.com/set-cookie-parser/-/set-cookie-parser-2.7.1.tgz#3016f150072202dfbe90fadee053573cc89d2943"
@@ -3494,7 +3514,7 @@ yaml@^2.3.4:
   resolved "https://registry.yarnpkg.com/yaml/-/yaml-2.7.0.tgz#aef9bb617a64c937a9a748803786ad8d3ffe1e98"
   integrity sha512-+hSoy/QHluxmC9kCIJyL/uyFmLmc+e5CFR5Wa+bpIhIj85LVb9ZH2nVnqrHoSvKogwODv0ClqZkmiSSaIH5LTA==
 
-zod@^3.22.4:
+zod@^3.24.2:
   version "3.24.2"
   resolved "https://registry.yarnpkg.com/zod/-/zod-3.24.2.tgz#8efa74126287c675e92f46871cfc8d15c34372b3"
   integrity sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ==

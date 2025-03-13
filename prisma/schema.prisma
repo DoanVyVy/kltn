@@ -12,23 +12,23 @@ datasource db {
 }
 
 model User {
-  userId                Int                     @id @default(autoincrement())
-  username              String                  @unique
-  email                 String                  @unique
-  passwordHash          String                  @map("password_hash")
-  fullName              String?                 @map("full_name")
-  avatarUrl             String?                 @map("avatar_url")
-  currentLevel          Int                     @default(1) @map("current_level")
-  totalPoints           Int                     @default(0) @map("total_points")
-  streakDays            Int                     @default(0) @map("streak_days")
-  lastActiveDate        DateTime?               @map("last_active_date")
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
-  userAchievements      UserAchievement[]
-  userActivities        UserActivity[]
-  userProgress          UserProgress[]
-  leaderboardEntries    LeaderboardEntry[]
-  UserCollectionProcess UserCollectionProcess[]
+  userId               String                @id @default(uuid()) @map("user_id") @db.Uuid
+  username             String                @unique
+  email                String                @unique
+  passwordHash         String                @map("password_hash")
+  fullName             String?               @map("full_name")
+  avatarUrl            String?               @map("avatar_url")
+  currentLevel         Int                   @default(1) @map("current_level")
+  totalPoints          Int                   @default(0) @map("total_points")
+  streakDays           Int                   @default(0) @map("streak_days")
+  lastActiveDate       DateTime?             @map("last_active_date")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  userAchievements     UserAchievement[]
+  userActivities       UserActivity[]
+  userProgress         UserProgress[]
+  leaderboardEntries   LeaderboardEntry[]
+  userFlashCardAnswers UserFlashCardAnswer[]
 
   @@map("users")
   @@schema("public")
@@ -60,7 +60,7 @@ model Achievement {
 }
 
 model UserAchievement {
-  userId        Int         @map("user_id")
+  userId        String      @map("user_id") @db.Uuid
   achievementId Int         @map("achievement_id")
   dateAchieved  DateTime    @default(now()) @map("date_achieved") @db.Timestamptz(6)
   user          User        @relation(fields: [userId], references: [userId], onDelete: Cascade)
@@ -81,25 +81,27 @@ model VocabularyCategory {
   orderIndex      Int?             @map("order_index")
   vocabularyWords VocabularyWord[]
   userProgress    UserProgress[]
+  totalWords      Int              @default(0) @map("total_words")
 
   @@map("vocabulary_categories")
   @@schema("public")
 }
 
 model VocabularyWord {
-  wordId           Int                @id @default(autoincrement()) @map("word_id")
-  categoryId       Int                @map("category_id")
-  word             String
-  pronunciation    String?
-  partOfSpeech     String?            @map("part_of_speech")
-  definition       String
-  exampleSentence  String?            @map("example_sentence")
-  imageUrl         String?            @map("image_url")
-  audioUrl         String?            @map("audio_url")
-  difficultyLevel  Int                @default(1) @map("difficulty_level")
-  category         VocabularyCategory @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
-  gameQuestions    GameQuestion[]
-  CollectionDetail CollectionDetail[]
+  wordId               Int                   @id @default(autoincrement()) @map("word_id")
+  categoryId           Int                   @map("category_id")
+  word                 String
+  pronunciation        String?
+  partOfSpeech         String?               @map("part_of_speech")
+  definition           String
+  exampleSentence      String?               @map("example_sentence")
+  imageUrl             String?               @map("image_url")
+  audioUrl             String?               @map("audio_url")
+  difficultyLevel      Int                   @default(1) @map("difficulty_level")
+  category             VocabularyCategory    @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  gameQuestions        GameQuestion[]
+  paronymWords         String[]
+  userFlashCardAnswers UserFlashCardAnswer[]
 
   @@index([categoryId])
   @@map("vocabulary_words")
@@ -194,7 +196,7 @@ model GameQuestion {
 
 model UserActivity {
   activityLogId    Int           @id @default(autoincrement()) @map("activity_log_id")
-  userId           Int           @map("user_id")
+  userId           String        @map("user_id") @db.Uuid
   activityId       Int?          @map("activity_id")
   startTime        DateTime      @default(now()) @map("start_time") @db.Timestamptz(6)
   endTime          DateTime?     @map("end_time") @db.Timestamptz(6)
@@ -230,18 +232,38 @@ model UserAnswer {
   @@schema("public")
 }
 
+model UserFlashCardAnswer {
+  id        Int            @id @default(autoincrement())
+  userId    String         @map("user_id") @db.Uuid
+  wordId    Int            @map("word_id")
+  isCorrect Boolean        @map("is_correct")
+  processId Int            @map("process_id")
+  user      User           @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  word      VocabularyWord @relation(fields: [wordId], references: [wordId], onDelete: Cascade)
+  process   UserProgress   @relation(fields: [processId], references: [progressId], onDelete: Cascade)
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@index([wordId])
+  @@index([processId])
+  @@map("user_flashcard_answers")
+  @@schema("public")
+}
+
 model UserProgress {
-  progressId     Int                 @id @default(autoincrement()) @map("progress_id")
-  userId         Int                 @map("user_id")
-  categoryId     Int?                @map("category_id")
-  topicId        Int?                @map("topic_id")
-  masteryLevel   Decimal             @default(0) @map("mastery_level") @db.Decimal(5, 2)
-  timesPracticed Int                 @default(0) @map("times_practiced")
-  lastPracticed  DateTime?           @map("last_practiced") @db.Timestamptz(6)
-  nextReviewDate DateTime?           @map("next_review_date") @db.Timestamptz(6)
-  user           User                @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  category       VocabularyCategory? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
-  topic          GrammarTopic?       @relation(fields: [topicId], references: [topicId], onDelete: SetNull)
+  progressId           Int                   @id @default(autoincrement()) @map("progress_id")
+  userId               String                @map("user_id") @db.Uuid
+  categoryId           Int?                  @map("category_id")
+  topicId              Int?                  @map("topic_id")
+  masteryLevel         Decimal               @default(0) @map("mastery_level") @db.Decimal(5, 2)
+  timesPracticed       Int                   @default(0) @map("times_practiced")
+  lastPracticed        DateTime?             @map("last_practiced") @db.Timestamptz(6)
+  nextReviewDate       DateTime?             @map("next_review_date") @db.Timestamptz(6)
+  user                 User                  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  category             VocabularyCategory?   @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  topic                GrammarTopic?         @relation(fields: [topicId], references: [topicId], onDelete: SetNull)
+  userFlashCardAnswers UserFlashCardAnswer[]
+  processPercentage    Int                   @default(0) @map("process_percentage")
 
   @@index([userId])
   @@index([categoryId])
@@ -265,7 +287,7 @@ model Leaderboard {
 model LeaderboardEntry {
   entryId       Int         @id @default(autoincrement()) @map("entry_id")
   leaderboardId Int         @map("leaderboard_id")
-  userId        Int         @map("user_id")
+  userId        String      @map("user_id") @db.Uuid
   score         Int
   rank          Int?
   updatedAt     DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
@@ -278,41 +300,41 @@ model LeaderboardEntry {
   @@schema("public")
 }
 
-model VocabularyCollection {
-  id                    Int                     @id @default(autoincrement())
-  name                  String
-  CollectionDetail      CollectionDetail[]
-  UserCollectionProcess UserCollectionProcess[]
+// model VocabularyCollection {
+//   id                    Int                     @id @default(autoincrement())
+//   name                  String
+//   CollectionDetail      CollectionDetail[]
+//   UserCollectionProcess UserCollectionProcess[]
 
-  @@schema("public")
-}
+//   @@schema("public")
+// }
 
-model CollectionDetail {
-  id                      Int                     @id @default(autoincrement())
-  collectionId            Int
-  wordId                  Int
-  collection              VocabularyCollection    @relation(fields: [collectionId], references: [id])
-  word                    VocabularyWord          @relation(fields: [wordId], references: [wordId])
-  inCorrectAnswers        String[]
-  userCollectionProcesses UserCollectionProcess[]
+// model CollectionDetail {
+//   id                      Int                     @id @default(autoincrement())
+//   collectionId            Int
+//   wordId                  Int
+//   collection              VocabularyCollection    @relation(fields: [collectionId], references: [id])
+//   word                    VocabularyWord          @relation(fields: [wordId], references: [wordId])
+//   inCorrectAnswers        String[]
+//   userCollectionProcesses UserCollectionProcess[]
 
-  @@index([wordId])
-  @@index([collectionId])
-  @@schema("public")
-}
+//   @@index([wordId])
+//   @@index([collectionId])
+//   @@schema("public")
+// }
 
-model UserCollectionProcess {
-  id                     Int                   @id @default(autoincrement())
-  userId                 Int
-  collectionDetailId     Int
-  isCorrect              Boolean               @default(false)
-  user                   User                  @relation(fields: [userId], references: [userId])
-  collectionDetail       CollectionDetail      @relation(fields: [collectionDetailId], references: [id])
-  vocabularyCollectionId Int?
-  VocabularyCollection   VocabularyCollection? @relation(fields: [vocabularyCollectionId], references: [id])
+// model UserCollectionProcess {
+//   id                     Int                   @id @default(autoincrement())
+//   userId                 String                @map("user_id") @db.Uuid
+//   collectionDetailId     Int
+//   isCorrect              Boolean               @default(false)
+//   user                   User                  @relation(fields: [userId], references: [userId])
+//   collectionDetail       CollectionDetail      @relation(fields: [collectionDetailId], references: [id])
+//   vocabularyCollectionId Int?
+//   VocabularyCollection   VocabularyCollection? @relation(fields: [vocabularyCollectionId], references: [id])
 
-  @@index([userId])
-  @@index([collectionDetailId])
-  @@index([vocabularyCollectionId])
-  @@schema("public")
-}
+//   @@index([userId])
+//   @@index([collectionDetailId])
+//   @@index([vocabularyCollectionId])
+//   @@schema("public")
+// }

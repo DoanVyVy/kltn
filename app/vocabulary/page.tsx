@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Filter, BookOpen, Clock, Plus, Bookmark } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import Navigation from "@/components/navigation";
-import { useRouter } from "next/navigation";
 import { VocabularyModeDialog } from "@/components/vocabulary-mode-dialog";
-import { VocabularyCollection } from "@prisma/client";
 import dayjs from "dayjs";
+import { trpc } from "@/trpc/client";
 // Dữ liệu mẫu cho các khóa học từ vựng
 const vocabularyCourses = [
 	{
@@ -106,7 +105,6 @@ const vocabularyCourses = [
 // Dữ liệu mẫu cho các bộ từ vựng đang học
 
 export default function VocabularyPage() {
-	const router = useRouter();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [activeTab, setActiveTab] = useState("learning");
 	const [showModeDialog, setShowModeDialog] = useState(false);
@@ -124,15 +122,21 @@ export default function VocabularyPage() {
 				tag.toLowerCase().includes(searchQuery.toLowerCase())
 			)
 	);
-	const [data, setData] = useState<
-		(VocabularyCollection & { progress: number })[]
-	>([]);
-	console.log(data);
-	useEffect(() => {
-		fetch("/api/vocab_collection")
-			.then((res) => res.json())
-			.then((data) => setData(data));
-	}, []);
+	const { data = [], isLoading } =
+		trpc.userProcess.getCategoryProcesses.useQuery();
+	// toDo: loading animation
+
+	const { data: allCourses = [] } =
+		trpc.vocabularyCategory.getValidCategories.useQuery();
+
+	const { mutateAsync } = trpc.userProcess.userRegisterCategory.useMutation();
+	const utils = trpc.useUtils();
+	const handleRegister = async () => {
+		await mutateAsync({
+			categoryId: selectedCourseId,
+		});
+		utils.userProcess.getCategoryProcesses.invalidate();
+	};
 
 	return (
 		<div className="min-h-screen bg-game-background">
@@ -203,7 +207,7 @@ export default function VocabularyPage() {
 							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 								{data.map((course) => (
 									<motion.div
-										key={course.id}
+										key={course.categoryId}
 										initial={{ opacity: 0, y: 20 }}
 										animate={{ opacity: 1, y: 0 }}
 										transition={{ duration: 0.3 }}
@@ -212,7 +216,10 @@ export default function VocabularyPage() {
 										<Card className="game-card h-full transition-all hover:border-game-primary/50">
 											<CardHeader className="pb-2">
 												<CardTitle className="text-xl text-game-accent">
-													{course.name}
+													{
+														course.category
+															?.categoryName
+													}
 												</CardTitle>
 												<CardDescription className="flex items-center gap-1 text-game-accent/70">
 													<Clock className="h-4 w-4" />{" "}
@@ -228,11 +235,18 @@ export default function VocabularyPage() {
 															Tiến độ
 														</span>
 														<span className="text-game-primary">
-															{course.progress}%
+															{course.processPercentage.toFixed(
+																0
+															)}
+															%
 														</span>
 													</div>
 													<Progress
-														value={course.progress}
+														value={parseInt(
+															course.processPercentage.toFixed(
+																0
+															)
+														)}
 														className="h-2 bg-white"
 														indicatorClassName="bg-game-primary"
 													/>
@@ -261,7 +275,8 @@ export default function VocabularyPage() {
 													className="game-button w-full"
 													onClick={() => {
 														setSelectedCourseId(
-															course.id
+															course.category
+																?.categoryId!
 														);
 														setShowModeDialog(true);
 													}}
@@ -304,11 +319,12 @@ export default function VocabularyPage() {
 						</div>
 
 						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-							{filteredCourses
-								.filter((course) => course.isFeatured)
+							{allCourses
+								.sort((a, b) => Math.random() - 0.5)
+								.slice(0, 3)
 								.map((course) => (
 									<motion.div
-										key={course.id}
+										key={course.categoryId}
 										initial={{ opacity: 0, y: 20 }}
 										animate={{ opacity: 1, y: 0 }}
 										transition={{ duration: 0.3 }}
@@ -321,22 +337,28 @@ export default function VocabularyPage() {
 														variant="outline"
 														className="bg-game-primary/10 text-game-primary"
 													>
-														{course.level}
+														{
+															DIFICULTY_LEVELS.find(
+																(level) =>
+																	level.value ==
+																	course.difficultyLevel
+															)?.label
+														}
 													</Badge>
 													<Button
 														variant="ghost"
 														size="icon"
 														className="h-8 w-8 text-amber-500"
 													>
-														{course.isBookmarked ? (
+														{/* {course.isBookmarked ? (
 															<Bookmark className="h-4 w-4 fill-current" />
 														) : (
 															<Bookmark className="h-4 w-4" />
-														)}
+														)} */}
 													</Button>
 												</div>
 												<CardTitle className="mt-2 text-xl text-game-accent">
-													{course.title}
+													{course.categoryName}
 												</CardTitle>
 												<CardDescription className="text-game-accent/70">
 													{course.description}
@@ -354,9 +376,9 @@ export default function VocabularyPage() {
 														variant="outline"
 														className="bg-gray-100"
 													>
-														{course.category}
+														{course.categoryName}
 													</Badge>
-													{course.tags.map((tag) => (
+													{/* {course.tags.map((tag) => (
 														<Badge
 															key={tag}
 															variant="outline"
@@ -364,7 +386,7 @@ export default function VocabularyPage() {
 														>
 															{tag}
 														</Badge>
-													))}
+													))} */}
 												</div>
 											</CardContent>
 											<CardFooter className="flex justify-between">
@@ -378,7 +400,7 @@ export default function VocabularyPage() {
 													className="game-button"
 													onClick={() => {
 														setSelectedCourseId(
-															course.id
+															course.categoryId
 														);
 														setShowModeDialog(true);
 													}}
@@ -401,9 +423,9 @@ export default function VocabularyPage() {
 						</div>
 
 						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-							{filteredCourses.map((course) => (
+							{allCourses.map((course) => (
 								<motion.div
-									key={course.id}
+									key={course.categoryId}
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.3 }}
@@ -416,22 +438,28 @@ export default function VocabularyPage() {
 													variant="outline"
 													className="bg-game-primary/10 text-game-primary"
 												>
-													{course.level}
+													{
+														DIFICULTY_LEVELS.find(
+															(level) =>
+																level.value ==
+																course.difficultyLevel
+														)?.label
+													}
 												</Badge>
 												<Button
 													variant="ghost"
 													size="icon"
 													className="h-8 w-8 text-amber-500"
 												>
-													{course.isBookmarked ? (
+													{/* {course.isBookmarked ? (
 														<Bookmark className="h-4 w-4 fill-current" />
 													) : (
 														<Bookmark className="h-4 w-4" />
-													)}
+													)} */}
 												</Button>
 											</div>
 											<CardTitle className="mt-2 text-xl text-game-accent">
-												{course.title}
+												{course.categoryName}
 											</CardTitle>
 											<CardDescription className="text-game-accent/70">
 												{course.description}
@@ -449,7 +477,7 @@ export default function VocabularyPage() {
 													variant="outline"
 													className="bg-gray-100"
 												>
-													{course.category}
+													{course.categoryName}
 												</Badge>
 											</div>
 										</CardContent>
@@ -464,7 +492,7 @@ export default function VocabularyPage() {
 												className="game-button"
 												onClick={() => {
 													setSelectedCourseId(
-														course.id
+														course.categoryId
 													);
 													setShowModeDialog(true);
 												}}
@@ -579,8 +607,16 @@ export default function VocabularyPage() {
 					open={showModeDialog}
 					onOpenChange={setShowModeDialog}
 					courseId={selectedCourseId}
+					onRegister={handleRegister}
 				/>
 			</main>
 		</div>
 	);
 }
+
+const DIFICULTY_LEVELS = [
+	{ value: 1, label: "Sơ cấp" },
+	{ value: 2, label: "Trung cấp" },
+	{ value: 3, label: "Cao cấp" },
+	{ value: 4, label: "Nâng cao" },
+];
