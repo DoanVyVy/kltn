@@ -57,7 +57,7 @@ export default function VocabularyManagement() {
 			</Card>
 
 			<VocabularyTable
-				vocabulary={vocabulary}
+				vocabulary={vocabulary as never}
 				isLoading={isLoading}
 				openEditDialog={openEditDialog}
 				openDeleteDialog={openDeleteDialog}

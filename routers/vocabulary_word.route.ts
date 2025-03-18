@@ -48,7 +48,7 @@ const vocabularyWordRouter = createTRPCRouter({
 	create: baseProcedure
 		.input(createVocabularySchema)
 		.mutation(async ({ ctx: { db }, input }) => {
-			return await db.vocabularyWord.create({
+			const data = await db.vocabularyWord.create({
 				data: {
 					definition: input.definitions?.[0]?.definition,
 					categoryId: input.categoryId,
@@ -59,6 +59,17 @@ const vocabularyWordRouter = createTRPCRouter({
 					pronunciation: input.phonetic,
 				},
 			});
+			db.vocabularyCategory.update({
+				where: {
+					categoryId: input.categoryId,
+				},
+				data: {
+					totalWords: {
+						increment: 1,
+					},
+				},
+			});
+			return data;
 		}),
 
 	update: baseProcedure

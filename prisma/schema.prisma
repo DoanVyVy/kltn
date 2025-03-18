@@ -82,6 +82,7 @@ model VocabularyCategory {
   vocabularyWords VocabularyWord[]
   userProgress    UserProgress[]
   totalWords      Int              @default(0) @map("total_words")
+  status          String           @default("active")
 
   @@map("vocabulary_categories")
   @@schema("public")
@@ -102,6 +103,7 @@ model VocabularyWord {
   gameQuestions        GameQuestion[]
   paronymWords         String[]
   userFlashCardAnswers UserFlashCardAnswer[]
+  definitions          Json                  @default("[]") @db.Json
 
   @@index([categoryId])
   @@map("vocabulary_words")

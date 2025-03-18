@@ -33,14 +33,14 @@ export default function DeleteVocabularyDialog({
 				utils.vocabulary.getAll.invalidate();
 				setIsOpen(false);
 			},
-			onError: (error) => {
+			onError: (error: any) => {
 				toast({
 					title: "Lỗi",
 					description: error.message || "Không thể xóa từ vựng",
 					variant: "destructive",
 				});
 			},
-		});
+		} as any);
 
 	const handleDeleteWord = () => {
 		if (currentWord && currentWord.wordId) {
