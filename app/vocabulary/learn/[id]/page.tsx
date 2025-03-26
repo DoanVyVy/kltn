@@ -16,193 +16,247 @@ import { SpellingPractice } from "./_components/Typing";
 import { WordCard } from "./_components/WordChoice/WordCard";
 
 export default function LearnVocabularyPage() {
-	const router = useRouter();
-	const params = useParams();
-	const categoryId = Number(params.id);
+  const router = useRouter();
+  const params = useParams();
+  const categoryId = Number(params.id);
 
-	// Queries
-	const { data: words, isLoading: isWordsLoading } =
-		trpc.vocabularyCategory.getRandomWords.useQuery({
-			take: 5,
-			categoryId,
-		});
+  // Queries - Cập nhật để lấy chính xác 10 từ vựng từ API
+  const { data: vocabularyWords, isLoading: isWordsLoading } =
+    trpc.category.getRandomWords.useQuery(
+      {
+        categoryId: categoryId,
+        size: 10, // Lấy chính xác 10 từ vựng mỗi lần học
+      },
+      {
+        enabled: !!categoryId,
+        refetchOnWindowFocus: false,
+      }
+    );
 
-	const { data: collection, isLoading: isCollectionLoading } =
-		trpc.vocabularyCategory.getVocabularyCategoryById.useQuery(categoryId);
+  // Lấy thông tin về khóa học
+  const { data: collection, isLoading: isCollectionLoading } =
+    trpc.category.getCategoryById.useQuery(categoryId, {
+      enabled: !!categoryId,
+    });
 
-	const { mutateAsync } = trpc.userProcess.userAnswerFlashcard.useMutation();
+  const { mutateAsync } = trpc.userProcess.userAnswerFlashcard.useMutation();
 
-	// State
-	const [currentIndex, setCurrentIndex] = useState(0);
-	const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-	const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-	const [showAnswer, setShowAnswer] = useState(false);
-	const [progress, setProgress] = useState(0);
-	const [stats, setStats] = useState<LearningStats>({
-		correct: 0,
-		incorrect: 0,
-		skipped: 0,
-	});
-	const [showCelebration, setShowCelebration] = useState(false);
+  // State
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [stats, setStats] = useState<LearningStats>({
+    correct: 0,
+    incorrect: 0,
+    skipped: 0,
+  });
+  const [showCelebration, setShowCelebration] = useState(false);
 
-	const currentWord = words?.[currentIndex];
-	const { isPlaying: isAudioPlaying, play: playAudio } = useAudio(
-		currentWord?.audioUrl!
-	);
+  // Chuẩn bị mảng từ vựng và từ hiện tại
+  const words = vocabularyWords || [];
+  const currentWord = words[currentIndex];
 
-	const answerOptions = React.useMemo(() => {
-		if (!currentWord) return [];
-		return [currentWord.word, ...currentWord.paronymWords.slice(0, 3)].sort(
-			() => Math.random() - 0.5
-		);
-	}, [currentWord]);
-	const utils = trpc.useUtils();
+  const { isPlaying: isAudioPlaying, play: playAudio } = useAudio(
+    currentWord?.audioUrl!
+  );
 
-	useEffect(() => {
-		setProgress((currentIndex / (words?.length || 1)) * 100);
-	}, [currentIndex, words?.length]);
+  // Tạo danh sách đáp án từ dữ liệu hiện có
+  let answerOptions: string[] = [];
+  if (currentWord) {
+    // Danh sách từ ngẫu nhiên từ danh sách từ vựng
+    const otherOptions: string[] = [];
+    const wordsCopy = [...words]; // Tạo bản sao để tránh thay đổi mảng gốc
 
-	const handleSelectAnswer = (answer: string) => {
-		if (selectedAnswer || showAnswer) return;
+    // Lọc và chỉ lấy tối đa 3 từ khác
+    for (let i = 0; i < wordsCopy.length; i++) {
+      if (wordsCopy[i].wordId !== currentWord.wordId) {
+        otherOptions.push(wordsCopy[i].word);
+        // Dừng khi đủ 3 từ
+        if (otherOptions.length >= 3) break;
+      }
+    }
 
-		setSelectedAnswer(answer);
-		const correct =
-			answer.toLocaleUpperCase().trim() ===
-			currentWord?.word.toLocaleUpperCase().trim();
-		setIsCorrect(correct);
-		setStats((prev) => ({
-			...prev,
-			[correct ? "correct" : "incorrect"]:
-				prev[correct ? "correct" : "incorrect"] + 1,
-		}));
+    // Tạo mảng đáp án và xáo trộn
+    answerOptions = [currentWord.word, ...otherOptions];
+    answerOptions.sort(() => Math.random() - 0.5);
+  }
 
-		setShowAnswer(true);
+  const utils = trpc.useUtils();
 
-		playAudio();
-		if (correct) {
-			setTimeout(() => {
-				handleNext();
-			}, 1500);
-		}
+  useEffect(() => {
+    setProgress((currentIndex / (words?.length || 1)) * 100);
+  }, [currentIndex, words?.length]);
 
-		if (currentWord) {
-			mutateAsync({
-				categoryId: collection?.categoryId!,
-				correct: correct,
-				wordId: currentWord.wordId,
-			}).finally(() => {
-				utils.userProcess.getCategoryProcesses.invalidate();
-			});
-		}
-	};
+  const handleSelectAnswer = (answer: string) => {
+    if (selectedAnswer || showAnswer) return;
 
-	const handleNext = () => {
-		if (words && currentIndex < words.length - 1) {
-			// Reset states
-			setSelectedAnswer(null);
-			setIsCorrect(null);
-			setShowAnswer(false);
+    setSelectedAnswer(answer);
+    const correct =
+      answer.toLocaleUpperCase().trim() ===
+      currentWord?.word.toLocaleUpperCase().trim();
+    setIsCorrect(correct);
+    setStats((prev) => ({
+      ...prev,
+      [correct ? "correct" : "incorrect"]:
+        prev[correct ? "correct" : "incorrect"] + 1,
+    }));
 
-			// Animate to next word
-			setCurrentIndex(currentIndex + 1);
-		} else {
-			// Show celebration animation
-			setShowCelebration(true);
-			setTimeout(() => {
-				router.push(`/vocabulary/${collection?.categoryId}`);
-			}, 3000);
-		}
-	};
+    setShowAnswer(true);
 
-	const handleShowAnswer = () => {
-		setShowAnswer(true);
-		setStats((prev) => ({
-			...prev,
-			skipped: prev.skipped + 1,
-		}));
-	};
+    playAudio();
+    if (correct) {
+      setTimeout(() => {
+        handleNext();
+      }, 1500);
+    }
 
-	const handlePlayAudio = () => {
-		console.log("Playing audio");
-		playAudio();
-	};
+    if (currentWord) {
+      mutateAsync({
+        categoryId: collection?.categoryId!,
+        correct: correct,
+        wordId: currentWord.wordId,
+      }).finally(() => {
+        utils.userProcess.getCategoryProcesses.invalidate();
+      });
+    }
+  };
 
-	const handleFinish = () => {
-		router.push(`/vocabulary/${collection?.categoryId}`);
-	};
+  const handleNext = () => {
+    if (words && currentIndex < words.length - 1) {
+      // Reset states
+      setSelectedAnswer(null);
+      setIsCorrect(null);
+      setShowAnswer(false);
 
-	const handleBack = () => {
-		router.push(`/vocabulary/${collection?.categoryId}`);
-	};
+      // Animate to next word
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      // Show celebration animation
+      setShowCelebration(true);
+      setTimeout(() => {
+        router.push(`/vocabulary/${collection?.categoryId}`);
+      }, 3000);
+    }
+  };
 
-	// Loading state
-	if (isWordsLoading || isCollectionLoading) {
-		return <div>Loading...</div>;
-	}
+  const handleShowAnswer = () => {
+    setShowAnswer(true);
+    setStats((prev) => ({
+      ...prev,
+      skipped: prev.skipped + 1,
+    }));
+  };
 
-	return (
-		<div className="min-h-screen bg-game-background">
-			<Navigation />
+  const handlePlayAudio = () => {
+    playAudio();
+  };
 
-			<main className="container mx-auto px-4 py-8">
-				<NavigationHeader
-					collection={collection || undefined}
-					onBack={handleBack}
-				/>
+  const handleFinish = () => {
+    router.push(`/vocabulary/${collection?.categoryId}`);
+  };
 
-				<ProgressHeader
-					currentIndex={currentIndex}
-					totalItems={words?.length || 0}
-					progress={progress}
-					stats={stats}
-				/>
+  const handleBack = () => {
+    router.push(`/vocabulary/${collection?.categoryId}`);
+  };
 
-				<AnimatePresence mode="wait">
-					{showCelebration ? (
-						<CelebrationScreen
-							stats={stats}
-							onFinish={handleFinish}
-						/>
-					) : (
-						<RandomStrategy
-							currentWord={currentWord}
-							answerOptions={answerOptions}
-							currentIndex={currentIndex}
-							showAnswer={showAnswer}
-							isAudioPlaying={isAudioPlaying}
-							selectedAnswer={selectedAnswer}
-							isCorrect={isCorrect}
-							onPlayAudio={handlePlayAudio}
-							onSelectAnswer={handleSelectAnswer}
-							onShowAnswer={handleShowAnswer}
-							onNext={handleNext}
-							onSubmitAnswer={handleSelectAnswer}
-						/>
-					)}
-				</AnimatePresence>
-			</main>
-		</div>
-	);
+  // Loading state
+  if (isWordsLoading || isCollectionLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-game-background">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-game-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // Kiểm tra nếu không có từ vựng nào
+  if (words.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-game-background">
+        <Navigation />
+        <div className="container mx-auto px-4 py-8 text-center">
+          <h1 className="text-2xl font-bold text-game-accent mb-4">
+            Không có từ vựng
+          </h1>
+          <p className="text-game-accent/70 mb-6">
+            Khóa học này chưa có từ vựng nào. Vui lòng chọn khóa học khác.
+          </p>
+          <button
+            className="game-button"
+            onClick={() => router.push("/vocabulary")}
+          >
+            Quay lại Trang Từ Vựng
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-game-background">
+      <Navigation />
+
+      <main className="container mx-auto px-4 py-8">
+        <NavigationHeader
+          collection={collection || undefined}
+          onBack={handleBack}
+        />
+
+        <ProgressHeader
+          currentIndex={currentIndex}
+          totalItems={words?.length || 0}
+          progress={progress}
+          stats={stats}
+        />
+
+        <AnimatePresence mode="wait">
+          {showCelebration ? (
+            <CelebrationScreen stats={stats} onFinish={handleFinish} />
+          ) : (
+            <RandomStrategy
+              {...({
+                currentWord,
+                answerOptions,
+                currentIndex,
+                showAnswer,
+                isAudioPlaying,
+                selectedAnswer,
+                isCorrect,
+                onPlayAudio: handlePlayAudio,
+                onSelectAnswer: handleSelectAnswer,
+                onShowAnswer: handleShowAnswer,
+                onNext: handleNext,
+                onSubmitAnswer: handleSelectAnswer,
+              } as unknown as StrategyProps)}
+            />
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
+  );
 }
 
 interface StrategyProps {
-	currentWord: VocabularyWord | undefined;
-	answerOptions: string[];
-	currentIndex: number;
-	showAnswer: boolean;
-	isAudioPlaying: boolean;
-	selectedAnswer: string | null;
-	isCorrect: boolean | null;
-	onPlayAudio: () => void;
-	onSelectAnswer: (answer: string) => void;
-	onShowAnswer: () => void;
-	onNext: () => void;
-	onSubmitAnswer: (answer: string) => void;
+  currentWord: VocabularyWord | undefined;
+  answerOptions: string[];
+  currentIndex: number;
+  showAnswer: boolean;
+  isAudioPlaying: boolean;
+  selectedAnswer: string | null;
+  isCorrect: boolean | null;
+  onPlayAudio: () => void;
+  onSelectAnswer: (answer: string) => void;
+  onShowAnswer: () => void;
+  onNext: () => void;
+  onSubmitAnswer: (answer: string) => void;
 }
 const STRATEGY = [DefinitionMatching, SpellingPractice, WordCard];
 function RandomStrategy(props: StrategyProps) {
-	const Component = React.useMemo(() => {
-		return STRATEGY[Math.floor(Math.random() * STRATEGY.length)];
-	}, [props.currentIndex]);
-	return <Component {...(props as any)} />;
+  const Component = React.useMemo(() => {
+    return STRATEGY[Math.floor(Math.random() * STRATEGY.length)];
+  }, [props.currentIndex]);
+
+  // Sử dụng spread operator và as unknown as any để tránh lỗi type instantiation
+  return <Component {...(props as unknown as any)} />;
 }

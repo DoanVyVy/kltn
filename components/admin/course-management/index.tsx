@@ -4,171 +4,157 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PlusCircle } from "lucide-react";
+import { Category } from "@prisma/client";
 import { trpc } from "@/trpc/client";
-import useSearchDebounce from "@/hooks/useSearchDebounce";
-import { VocabularyCategory } from "@prisma/client";
-
+import { useToast } from "@/components/ui/use-toast";
 import CourseTable from "./components/course-table";
-import SearchFilters from "./components/search-filters";
 import AddCourseDialog from "./components/add-course-dialog";
 import EditCourseDialog from "./components/edit-course-dialog";
-import DeleteDialog from "./components/delete-dialog";
+import DeleteCourseDialog from "./components/delete-course-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type CourseType = "all" | "vocabulary" | "grammar";
 
 export default function CourseManagement() {
-	const [statusFilter, setStatusFilter] = useState("all");
-	const [page, setPage] = useState(1);
-	const {
-		setValue: setSearchTerm,
-		value: searchTerm,
-		debouncedValue: debouncedSearchTerm,
-	} = useSearchDebounce({ delay: 1000 });
+  const { toast } = useToast();
+  const [currentCourse, setCurrentCourse] = useState<Category | null>(null);
+  const [dialog, setDialog] = useState<"edit" | "delete" | "add" | null>(null);
+  const [courseType, setCourseType] = useState<CourseType>("all");
+  const utils = trpc.useUtils();
 
-	const [currentDialog, setCurrentDialog] = useState<
-		"add" | "edit" | "delete" | null
-	>(null);
+  const { data: courses = [], isLoading } =
+    trpc.category.getValidCategories.useQuery(
+      courseType === "all"
+        ? undefined
+        : {
+            isVocabularyCourse: courseType === "vocabulary",
+          }
+    );
 
-	const [currentCourse, setCurrentCourse] =
-		useState<VocabularyCategory | null>(null);
+  const createMutation = trpc.category.create.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Thành công",
+        description: "Đã thêm khóa học mới",
+      });
+      utils.category.getValidCategories.invalidate();
+      setDialog(null);
+    },
+  });
 
-	const utils = trpc.useUtils();
+  const updateMutation = trpc.category.update.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật khóa học",
+      });
+      utils.category.getValidCategories.invalidate();
+      setDialog(null);
+    },
+  });
 
-	// Query courses data
-	const { data: courses } =
-		trpc.vocabularyCategory.getValidCategories.useQuery({
-			limit: 10,
-			page: page,
-			search: debouncedSearchTerm,
-			status: statusFilter === "all" ? undefined : statusFilter,
-		});
+  const deleteMutation = trpc.category.delete.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Thành công",
+        description: "Đã xóa khóa học",
+      });
+      utils.category.getValidCategories.invalidate();
+      setDialog(null);
+    },
+  });
 
-	// Mutation hooks
-	const { mutateAsync: createAsync, isPending: isCreating } =
-		trpc.vocabularyCategory.create.useMutation({
-			onSuccess: () => {
-				utils.vocabularyCategory.getValidCategories.invalidate();
-				setCurrentDialog(null);
-			},
-			onError: (error) => {
-				console.error(error);
-			},
-		});
+  const handleCreate = async (data: any) => {
+    await createMutation.mutateAsync({
+      ...data,
+      isVocabularyCourse: courseType === "vocabulary",
+    });
+  };
 
-	const { mutateAsync: editAsync, isPending: isEditing } =
-		trpc.vocabularyCategory.update.useMutation({
-			onSuccess: () => {
-				utils.vocabularyCategory.getValidCategories.invalidate();
-				setCurrentDialog(null);
-			},
-			onError: (error) => {
-				console.error(error);
-			},
-		});
+  const handleUpdate = async (data: any) => {
+    await updateMutation.mutateAsync(data);
+  };
 
-	const { mutateAsync: deleteAsync, isPending: isDeleting } =
-		trpc.vocabularyCategory.delete.useMutation({
-			onSuccess: () => {
-				utils.vocabularyCategory.getValidCategories.invalidate();
-				setCurrentDialog(null);
-			},
-			onError: (error) => {
-				console.error(error);
-			},
-		});
+  const handleDelete = async (id: number) => {
+    await deleteMutation.mutateAsync(id);
+  };
 
-	// Dialog state controls
-	const isAddDialogOpen = currentDialog === "add";
-	const isEditDialogOpen = currentDialog === "edit";
-	const isDeleteDialogOpen = currentDialog === "delete";
+  const openEditDialog = (course: Category) => {
+    setCurrentCourse(course);
+    setDialog("edit");
+  };
 
-	const setIsAddDialogOpen = (value: boolean) => {
-		if (!value) setCurrentDialog(null);
-		else setCurrentDialog("add");
-	};
+  const openDeleteDialog = (course: Category) => {
+    setCurrentCourse(course);
+    setDialog("delete");
+  };
 
-	const setIsEditDialogOpen = (value: boolean) => {
-		if (!value) setCurrentDialog(null);
-		else setCurrentDialog("edit");
-	};
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold">Quản lý khóa học</h2>
+          <Select
+            value={courseType}
+            onValueChange={(value: CourseType) => setCourseType(value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Chọn loại khóa học" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="vocabulary">Từ vựng</SelectItem>
+              <SelectItem value="grammar">Ngữ pháp</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          className="flex items-center gap-2 bg-game-primary hover:bg-game-primary/90"
+          onClick={() => setDialog("add")}
+        >
+          <PlusCircle size={16} />
+          Thêm khóa học mới
+        </Button>
+      </div>
 
-	const setIsDeleteDialogOpen = (value: boolean) => {
-		if (!value) setCurrentDialog(null);
-		else setCurrentDialog("delete");
-	};
+      <Card>
+        <CourseTable
+          courses={courses}
+          isLoading={isLoading}
+          onEdit={openEditDialog}
+          onDelete={openDeleteDialog}
+        />
+      </Card>
 
-	// Handlers
-	const openAddDialog = () => {
-		setIsAddDialogOpen(true);
-	};
+      {/* Dialogs */}
+      <AddCourseDialog
+        isOpen={dialog === "add"}
+        setIsOpen={(isOpen) => setDialog(isOpen ? "add" : null)}
+        onSubmit={handleCreate}
+        courseType={courseType}
+      />
 
-	const openEditDialog = (course: VocabularyCategory) => {
-		setCurrentCourse(course);
-		setIsEditDialogOpen(true);
-	};
+      <EditCourseDialog
+        isOpen={dialog === "edit"}
+        setIsOpen={(isOpen) => setDialog(isOpen ? "edit" : null)}
+        currentCourse={currentCourse}
+        onSubmit={handleUpdate}
+      />
 
-	const openDeleteDialog = (course: VocabularyCategory) => {
-		setCurrentCourse(course);
-		setIsDeleteDialogOpen(true);
-	};
-
-	const handleDeleteCourse = async () => {
-		if (currentCourse) {
-			await deleteAsync(currentCourse.categoryId);
-		}
-	};
-
-	return (
-		<div>
-			<div className="flex justify-between items-center mb-6">
-				<h2 className="text-2xl font-bold">Quản lý khóa học</h2>
-				<Button
-					className="flex items-center gap-2 bg-game-primary hover:bg-game-primary/90"
-					onClick={openAddDialog}
-				>
-					<PlusCircle size={16} />
-					Thêm khóa học mới
-				</Button>
-			</div>
-
-			<Card className="mb-6">
-				<SearchFilters
-					searchTerm={searchTerm}
-					setSearchTerm={setSearchTerm}
-					statusFilter={statusFilter}
-					setStatusFilter={setStatusFilter}
-				/>
-			</Card>
-
-			<Card>
-				<CourseTable
-					courses={courses || []}
-					onEdit={openEditDialog}
-					onDelete={openDeleteDialog}
-				/>
-			</Card>
-
-			{/* Dialogs */}
-			<AddCourseDialog
-				open={isAddDialogOpen}
-				onOpenChange={setIsAddDialogOpen}
-				createAsync={createAsync}
-				isCreating={isCreating}
-			/>
-
-			<EditCourseDialog
-				open={isEditDialogOpen}
-				onOpenChange={setIsEditDialogOpen}
-				editAsync={editAsync}
-				isEditing={isEditing}
-				currentCourse={currentCourse}
-			/>
-
-			<DeleteDialog
-				open={isDeleteDialogOpen}
-				onOpenChange={setIsDeleteDialogOpen}
-				onDelete={handleDeleteCourse}
-				isDeleting={isDeleting}
-				courseName={currentCourse?.categoryName}
-			/>
-		</div>
-	);
+      <DeleteCourseDialog
+        isOpen={dialog === "delete"}
+        setIsOpen={(isOpen: boolean) => setDialog(isOpen ? "delete" : null)}
+        currentCourse={currentCourse}
+        onConfirm={() =>
+          currentCourse && handleDelete(currentCourse.categoryId)
+        }
+      />
+    </div>
+  );
 }

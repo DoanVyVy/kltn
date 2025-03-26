@@ -29,62 +29,61 @@ Generate at least 5 words for the given topic. Ensure the words are relevant, va
 `;
 
 function parseGeminiResponse(res: string): any {
-	return JSON.parse(
-		res
-			.replace(/```json/g, "")
-			.replace(/```/g, "")
-			.replace(/"""/g, '\\"')
-	);
+  return JSON.parse(
+    res
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .replace(/"""/g, '\\"')
+  );
 }
 
 let chat: ChatSession | undefined;
 interface GeminiResponse {
-	word: string;
-	exampleSentence: string;
-	difficultyLevel: number;
-	samePronunciations: string[];
-	definition: string;
-	partOfSpeech: string;
+  word: string;
+  exampleSentence: string;
+  difficultyLevel: number;
+  samePronunciations: string[];
+  definition: string;
+  partOfSpeech: string;
 }
 
 const prisma = new PrismaClient();
 
-const listTopics = await prisma.vocabularyCategory.findMany({});
+const listTopics = await prisma.category.findMany({
+  where: {
+    isGrammar: false,
+  },
+});
 function sleep(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 for await (const topic of listTopics) {
-	chat = model.startChat({
-		history: [
-			{
-				role: "user",
-				parts: [{ text: prompt }],
-			},
-		],
-	});
-	for (let i = 0; i < 5; i++) {
-		const result = await chat.sendMessage(topic.categoryName);
-		const words = parseGeminiResponse(result.response.text());
-		const datas = words.map((word: GeminiResponse) => ({
-			categoryId: topic.categoryId,
-			paronymWords: word.samePronunciations,
-			definition: word.definition,
-			word: word.word,
-			exampleSentence: word.exampleSentence,
-			difficultyLevel: word.difficultyLevel,
-			imageUrl: "https://placewaifu.com/image/400/300",
-			partOfSpeech: word.partOfSpeech || "unknown",
-		}));
-		console.log(
-			"generated ",
-			datas.length,
-			" words for ",
-			topic.categoryName
-		);
-		await prisma.vocabularyWord.createMany({ data: datas });
+  chat = model.startChat({
+    history: [
+      {
+        role: "user",
+        parts: [{ text: prompt }],
+      },
+    ],
+  });
+  for (let i = 0; i < 5; i++) {
+    const result = await chat.sendMessage(topic.categoryName);
+    const words = parseGeminiResponse(result.response.text());
+    const datas = words.map((word: GeminiResponse) => ({
+      categoryId: topic.categoryId,
+      paronymWords: word.samePronunciations,
+      definition: word.definition,
+      word: word.word,
+      exampleSentence: word.exampleSentence,
+      difficultyLevel: word.difficultyLevel,
+      imageUrl: "https://placewaifu.com/image/400/300",
+      partOfSpeech: word.partOfSpeech || "unknown",
+    }));
+    console.log("generated ", datas.length, " words for ", topic.categoryName);
+    await prisma.vocabularyWord.createMany({ data: datas });
 
-		await sleep(1000);
-	}
+    await sleep(1000);
+  }
 }
 await sleep(1000);

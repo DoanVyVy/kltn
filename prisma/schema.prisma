@@ -72,19 +72,21 @@ model UserAchievement {
   @@schema("public")
 }
 
-model VocabularyCategory {
-  categoryId      Int              @id @default(autoincrement()) @map("category_id")
-  categoryName    String           @map("category_name")
-  description     String?
-  iconUrl         String?          @map("icon_url")
-  difficultyLevel Int              @default(1) @map("difficulty_level")
-  orderIndex      Int?             @map("order_index")
-  vocabularyWords VocabularyWord[]
-  userProgress    UserProgress[]
-  totalWords      Int              @default(0) @map("total_words")
-  status          String           @default("active")
+model Category {
+  categoryId        Int              @id @default(autoincrement()) @map("category_id")
+  categoryName      String           @map("category_name")
+  description       String?
+  difficultyLevel   Int              @default(1) @map("difficulty_level")
+  orderIndex        Int?             @map("order_index")
+  vocabularyWords   VocabularyWord[]
+  grammarContents   GrammarContent[]
+  userProgress      UserProgress[]
+  totalWords        Int              @default(0) @map("total_words")
+  totalGrammar      Int              @default(0) @map("total_grammar")
+  status            String           @default("active")
+  isVocabularyCourse Boolean         @default(true) @map("is_vocabulary_course")
 
-  @@map("vocabulary_categories")
+  @@map("categories")
   @@schema("public")
 }
 
@@ -96,10 +98,9 @@ model VocabularyWord {
   partOfSpeech         String?               @map("part_of_speech")
   definition           String
   exampleSentence      String?               @map("example_sentence")
-  imageUrl             String?               @map("image_url")
   audioUrl             String?               @map("audio_url")
   difficultyLevel      Int                   @default(1) @map("difficulty_level")
-  category             VocabularyCategory    @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  category             Category              @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   gameQuestions        GameQuestion[]
   paronymWords         String[]
   userFlashCardAnswers UserFlashCardAnswer[]
@@ -110,31 +111,18 @@ model VocabularyWord {
   @@schema("public")
 }
 
-model GrammarTopic {
-  topicId         Int              @id @default(autoincrement()) @map("topic_id")
-  topicName       String           @map("topic_name")
-  description     String?
-  difficultyLevel Int              @default(1) @map("difficulty_level")
-  orderIndex      Int?             @map("order_index")
-  grammarContents GrammarContent[]
-  userProgress    UserProgress[]
-
-  @@map("grammar_topics")
-  @@schema("public")
-}
-
 model GrammarContent {
   contentId     Int            @id @default(autoincrement()) @map("content_id")
-  topicId       Int            @map("topic_id")
+  categoryId    Int            @map("category_id")
   title         String
   explanation   String
   examples      String?
   notes         String?
   orderIndex    Int?           @map("order_index")
-  topic         GrammarTopic   @relation(fields: [topicId], references: [topicId], onDelete: Cascade)
+  category      Category       @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   gameQuestions GameQuestion[]
 
-  @@index([topicId])
+  @@index([categoryId])
   @@map("grammar_contents")
   @@schema("public")
 }
@@ -256,20 +244,17 @@ model UserProgress {
   progressId           Int                   @id @default(autoincrement()) @map("progress_id")
   userId               String                @map("user_id") @db.Uuid
   categoryId           Int?                  @map("category_id")
-  topicId              Int?                  @map("topic_id")
   masteryLevel         Decimal               @default(0) @map("mastery_level") @db.Decimal(5, 2)
   timesPracticed       Int                   @default(0) @map("times_practiced")
   lastPracticed        DateTime?             @map("last_practiced") @db.Timestamptz(6)
   nextReviewDate       DateTime?             @map("next_review_date") @db.Timestamptz(6)
   user                 User                  @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  category             VocabularyCategory?   @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
-  topic                GrammarTopic?         @relation(fields: [topicId], references: [topicId], onDelete: SetNull)
+  category             Category?             @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
   userFlashCardAnswers UserFlashCardAnswer[]
   processPercentage    Int                   @default(0) @map("process_percentage")
 
   @@index([userId])
   @@index([categoryId])
-  @@index([topicId])
   @@map("user_progress")
   @@schema("public")
 }
@@ -301,42 +286,3 @@ model LeaderboardEntry {
   @@map("leaderboard_entries")
   @@schema("public")
 }
-
-// model VocabularyCollection {
-//   id                    Int                     @id @default(autoincrement())
-//   name                  String
-//   CollectionDetail      CollectionDetail[]
-//   UserCollectionProcess UserCollectionProcess[]
-
-//   @@schema("public")
-// }
-
-// model CollectionDetail {
-//   id                      Int                     @id @default(autoincrement())
-//   collectionId            Int
-//   wordId                  Int
-//   collection              VocabularyCollection    @relation(fields: [collectionId], references: [id])
-//   word                    VocabularyWord          @relation(fields: [wordId], references: [wordId])
-//   inCorrectAnswers        String[]
-//   userCollectionProcesses UserCollectionProcess[]
-
-//   @@index([wordId])
-//   @@index([collectionId])
-//   @@schema("public")
-// }
-
-// model UserCollectionProcess {
-//   id                     Int                   @id @default(autoincrement())
-//   userId                 String                @map("user_id") @db.Uuid
-//   collectionDetailId     Int
-//   isCorrect              Boolean               @default(false)
-//   user                   User                  @relation(fields: [userId], references: [userId])
-//   collectionDetail       CollectionDetail      @relation(fields: [collectionDetailId], references: [id])
-//   vocabularyCollectionId Int?
-//   VocabularyCollection   VocabularyCollection? @relation(fields: [vocabularyCollectionId], references: [id])
-
-//   @@index([userId])
-//   @@index([collectionDetailId])
-//   @@index([vocabularyCollectionId])
-//   @@schema("public")
-// }

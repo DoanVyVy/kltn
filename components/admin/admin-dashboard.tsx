@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, LineChart, PieChart } from "@/components/admin/charts"
 import { Users, BookOpen, TrendingUp, Activity } from "lucide-react"
 
 export default function AdminDashboard() {
@@ -90,7 +89,6 @@ export default function AdminDashboard() {
             <CardDescription>Số lượng người dùng hoạt động theo ngày trong 30 ngày qua</CardDescription>
           </CardHeader>
           <CardContent className="pl-2">
-            <LineChart />
           </CardContent>
         </Card>
         <Card className="col-span-3">
@@ -99,7 +97,6 @@ export default function AdminDashboard() {
             <CardDescription>Phân bố người dùng theo cấp độ khóa học</CardDescription>
           </CardHeader>
           <CardContent>
-            <PieChart />
           </CardContent>
         </Card>
       </div>
@@ -120,7 +117,6 @@ export default function AdminDashboard() {
               <CardDescription>Số lượng bài học hoàn thành theo loại</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
-              <BarChart />
             </CardContent>
           </Card>
         </TabsContent>
@@ -131,7 +127,6 @@ export default function AdminDashboard() {
               <CardDescription>Số lượng bài học hoàn thành theo loại (tuần)</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
-              <BarChart />
             </CardContent>
           </Card>
         </TabsContent>
@@ -142,7 +137,6 @@ export default function AdminDashboard() {
               <CardDescription>Số lượng bài học hoàn thành theo loại (tháng)</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
-              <BarChart />
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,86 +1,84 @@
-import { Button } from "@/components/ui/button";
-import { CardContent } from "@/components/ui/card";
 import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import { Pencil, Trash2 } from "lucide-react";
-import { VocabularyCategory } from "@prisma/client";
-import { DifficultyDisplay } from "@/schema/category";
-import StatusBadge from "./status-badge";
+import { Button } from "@/components/ui/button";
+import { Edit, Trash2 } from "lucide-react";
+import { Category } from "@prisma/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CourseTableProps {
-	courses: VocabularyCategory[];
-	onEdit: (course: VocabularyCategory) => void;
-	onDelete: (course: VocabularyCategory) => void;
+  courses: Category[];
+  isLoading: boolean;
+  onEdit: (course: Category) => void;
+  onDelete: (course: Category) => void;
 }
 
 export default function CourseTable({
-	courses,
-	onEdit,
-	onDelete,
+  courses,
+  isLoading,
+  onEdit,
+  onDelete,
 }: CourseTableProps) {
-	return (
-		<CardContent className="p-0">
-			<Table>
-				<TableHeader>
-					<TableRow>
-						<TableHead>Id</TableHead>
-						<TableHead>Cấp độ</TableHead>
-						<TableHead>Tiêu đề</TableHead>
-						<TableHead>Mô tả</TableHead>
-						<TableHead>Số từ vựng</TableHead>
-						<TableHead>Số điểm ngữ pháp</TableHead>
-						<TableHead>Trạng thái</TableHead>
-						<TableHead className="text-right">Thao tác</TableHead>
-					</TableRow>
-				</TableHeader>
-				<TableBody>
-					{courses.map((course) => (
-						<TableRow key={course.categoryId}>
-							<TableCell>{course.categoryId}</TableCell>
-							<TableCell className="font-medium">
-								{
-									DifficultyDisplay[
-										course.difficultyLevel as keyof typeof DifficultyDisplay
-									]
-								}
-							</TableCell>
-							<TableCell>{course.categoryName}</TableCell>
-							<TableCell className="max-w-xs truncate">
-								{course.description}
-							</TableCell>
-							<TableCell>{course.totalWords}</TableCell>
-							<TableCell>{course.totalWords}</TableCell>
-							<TableCell>
-								<StatusBadge status={course.status as any} />
-							</TableCell>
-							<TableCell className="text-right">
-								<div className="flex justify-end gap-2">
-									<Button
-										variant="outline"
-										size="icon"
-										onClick={() => onEdit(course)}
-									>
-										<Pencil size={16} />
-									</Button>
-									<Button
-										variant="outline"
-										size="icon"
-										onClick={() => onDelete(course)}
-									>
-										<Trash2 size={16} />
-									</Button>
-								</div>
-							</TableCell>
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
-		</CardContent>
-	);
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Tên khóa học</TableHead>
+          <TableHead>Mô tả</TableHead>
+          <TableHead>Cấp độ</TableHead>
+          <TableHead>Thứ tự</TableHead>
+          <TableHead>Loại</TableHead>
+          <TableHead className="text-right">Thao tác</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {courses.map((course) => (
+          <TableRow key={course.categoryId}>
+            <TableCell>{course.categoryName}</TableCell>
+            <TableCell>{course.description}</TableCell>
+            <TableCell>{course.difficultyLevel}</TableCell>
+            <TableCell>{course.orderIndex}</TableCell>
+            <TableCell>
+              {course.isVocabularyCourse ? "Từ vựng" : "Ngữ pháp"}
+            </TableCell>
+            <TableCell className="text-right">
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onEdit(course)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(course)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
