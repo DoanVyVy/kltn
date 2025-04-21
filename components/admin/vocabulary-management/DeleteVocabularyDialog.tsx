@@ -9,17 +9,20 @@ import {
 } from "@/components/ui/dialog";
 import { trpc } from "@/trpc/client";
 import { toast } from "@/components/ui/use-toast";
+import { VocabularyWord } from "@prisma/client";
 
 interface DeleteVocabularyDialogProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  currentWord: any;
+  currentVocabulary: VocabularyWord;
+  onSuccess: () => void;
 }
 
 export default function DeleteVocabularyDialog({
   isOpen,
   setIsOpen,
-  currentWord,
+  currentVocabulary,
+  onSuccess,
 }: DeleteVocabularyDialogProps) {
   const utils = trpc.useUtils();
 
@@ -32,42 +35,45 @@ export default function DeleteVocabularyDialog({
         });
         utils.vocabulary.getAll.invalidate();
         setIsOpen(false);
+        onSuccess();
       },
-      onError: (error: any) => {
+      onError: (error) => {
         toast({
           title: "Lỗi",
           description: error.message || "Không thể xóa từ vựng",
           variant: "destructive",
         });
       },
-    } as any);
+    });
 
-  const handleDeleteWord = () => {
-    if (currentWord && currentWord.wordId) {
-      deleteAsync(currentWord.wordId);
-    }
+  const handleDelete = () => {
+    deleteAsync(currentVocabulary.wordId);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Xác nhận xóa</DialogTitle>
+          <DialogTitle>Xóa từ vựng</DialogTitle>
           <DialogDescription>
-            Bạn có chắc chắn muốn xóa từ vựng "{currentWord?.word}"? Hành động
-            này không thể hoàn tác.
+            Bạn có chắc chắn muốn xóa từ vựng "{currentVocabulary.word}"? Hành
+            động này không thể hoàn tác.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
+          <Button
+            variant="outline"
+            onClick={() => setIsOpen(false)}
+            disabled={isDeleting}
+          >
             Hủy
           </Button>
           <Button
             variant="destructive"
-            onClick={handleDeleteWord}
+            onClick={handleDelete}
             disabled={isDeleting}
           >
-            {isDeleting ? "Đang xóa..." : "Xóa từ vựng"}
+            {isDeleting ? "Đang xóa..." : "Xóa"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -239,76 +239,76 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          <div className="space-y-2">
+              <div className="space-y-2">
             <Label htmlFor="email">
               Email <span className="text-red-500">*</span>
             </Label>
-            <Input
+                <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              className="h-12"
-            />
-          </div>
+                  required
+                  className="h-12"
+                />
+              </div>
 
-          <div className="space-y-2">
+              <div className="space-y-2">
             <Label htmlFor="fullName">Họ và tên</Label>
-            <Input
+                <Input
               id="fullName"
               type="text"
               placeholder="Nguyễn Văn A"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="h-12"
-            />
-          </div>
+                  className="h-12"
+                />
+              </div>
 
-          <div className="space-y-2">
+              <div className="space-y-2">
             <Label htmlFor="password">
               Mật khẩu <span className="text-red-500">*</span>
             </Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              className="h-12"
-            />
-          </div>
+                  required
+                  className="h-12"
+                />
+              </div>
 
-          <div className="space-y-2">
+              <div className="space-y-2">
             <Label htmlFor="confirmPassword">
               Xác nhận mật khẩu <span className="text-red-500">*</span>
             </Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="h-12"
-            />
-          </div>
+                  required
+                  className="h-12"
+                />
+              </div>
 
-          <Button
-            type="submit"
-            disabled={isLoading}
+            <Button
+              type="submit"
+              disabled={isLoading}
             className="game-button h-12 w-full"
-          >
-            {isLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <>
+            >
+              {isLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <>
                 Đăng ký <ArrowRight className="ml-2 h-4 w-4" />
-              </>
-            )}
-          </Button>
+                </>
+              )}
+            </Button>
         </form>
 
         <div className="mt-6 text-center">

@@ -21,58 +21,52 @@ const grammarContentRouter = createTRPCRouter({
     )
     .query(async ({ ctx: { db }, input }) => {
       try {
-        // Lấy danh sách category là grammar (dựa theo isVocabularyCourse)
-        const grammarCategories = await db.category.findMany({
-          where: {
-            isVocabularyCourse: false,
-            status: "active",
-          },
-          select: {
-            categoryId: true,
-            categoryName: true,
-            description: true,
-          },
-        });
+        console.log("API Input:", JSON.stringify(input, null, 2));
 
-        const grammarCategoryIds = grammarCategories.map((c) => c.categoryId);
+        // Tạo điều kiện where hợp lệ với Prisma
+        let whereCondition: any = {};
 
-        // Nếu không có category ngữ pháp nào, trả về mảng rỗng
-        if (grammarCategoryIds.length === 0) {
-          return [];
+        // Nếu có categoryId, thêm vào điều kiện where
+        if (input.categoryId !== undefined && input.categoryId !== null) {
+          whereCondition.categoryId = input.categoryId;
+          console.log(`Đang lọc theo khóa học ID: ${input.categoryId}`);
         }
 
-        // Lấy tất cả nội dung ngữ pháp của các category ngữ pháp
+        // Nếu có từ khóa tìm kiếm, thêm vào điều kiện where
+        if (input.search && input.search.trim() !== "") {
+          whereCondition.OR = [
+            {
+              title: {
+                contains: input.search,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              explanation: {
+                contains: input.search,
+                mode: "insensitive" as const,
+              },
+            },
+          ];
+        }
+
+        console.log(
+          "Where condition:",
+          JSON.stringify(whereCondition, null, 2)
+        );
+
+        // Đếm tổng số bản ghi thỏa mãn điều kiện
+        const totalCount = await db.grammarContent.count({
+          where: whereCondition,
+        });
+
+        console.log(`Tổng số bản ghi thỏa mãn: ${totalCount}`);
+
+        // Lấy dữ liệu với phân trang
         const grammarContents = await db.grammarContent.findMany({
           skip: (input.page - 1) * input.limit,
           take: input.limit,
-          where: {
-            ...(input.search && {
-              OR: [
-                {
-                  title: {
-                    contains: input.search,
-                    mode: "insensitive",
-                  },
-                },
-                {
-                  explanation: {
-                    contains: input.search,
-                    mode: "insensitive",
-                  },
-                },
-              ],
-            }),
-            // Nếu có categoryId được chọn, lọc theo category đó
-            ...(input.categoryId && {
-              categoryId: input.categoryId,
-            }),
-            // Nếu không có categoryId được chọn, lấy tất cả các nội dung ngữ pháp
-            ...(!input.categoryId && {
-              categoryId: {
-                in: grammarCategoryIds,
-              },
-            }),
-          },
+          where: whereCondition,
           include: {
             category: {
               select: {
@@ -87,9 +81,15 @@ const grammarContentRouter = createTRPCRouter({
           },
         });
 
+        console.log(`Số bản ghi trả về: ${grammarContents.length}`);
         return grammarContents;
       } catch (error) {
         console.error("Error fetching grammar content:", error);
+        // Log chi tiết lỗi
+        if (error instanceof Error) {
+          console.error("Error message:", error.message);
+          console.error("Error stack:", error.stack);
+        }
         return [];
       }
     }),

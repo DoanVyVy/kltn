@@ -15,6 +15,7 @@ import {
   Share2,
   Users,
   X,
+  Volume2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useAudio } from "@/app/vocabulary/learn/[id]/_hooks/useAudio";
 
 // Định nghĩa cấu trúc dữ liệu
 interface WordDisplay {
@@ -46,6 +48,9 @@ interface WordDisplay {
   term: string;
   definition: string;
   example: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  audioUrl?: string;
 }
 
 interface Section {
@@ -99,6 +104,7 @@ export default function VocabularyCourseDetailPage({
     number | undefined
   >(undefined);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const { isPlaying, currentUrl, play } = useAudio();
 
   // Lấy ID khóa học từ params
   const courseId = parseInt(params.id);
@@ -128,6 +134,11 @@ export default function VocabularyCourseDetailPage({
   const learnedWords = sections
     .flatMap((section) => section.words.slice(0, section.learnedWords))
     .sort((a, b) => a.id - b.id);
+
+  // Hàm xử lý phát âm thanh
+  const handlePlayAudio = (audioUrl: string) => {
+    play(audioUrl);
+  };
 
   if (isLoading) {
     return (
@@ -574,6 +585,9 @@ export default function VocabularyCourseDetailPage({
                     <th className="hidden px-4 py-2 text-left text-sm font-medium text-game-accent md:table-cell">
                       Ví dụ
                     </th>
+                    <th className="hidden px-4 py-2 text-left text-sm font-medium text-game-accent md:table-cell">
+                      Media
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -592,12 +606,81 @@ export default function VocabularyCourseDetailPage({
                         <td className="hidden px-4 py-3 text-sm text-game-accent/70 md:table-cell">
                           {word.example}
                         </td>
+                        <td className="hidden px-4 py-3 text-sm text-game-accent/70 md:table-cell">
+                          <div className="flex flex-col gap-2">
+                            {word.imageUrl && (
+                              <div className="flex flex-col gap-1">
+                                <a
+                                  href={word.imageUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:underline"
+                                >
+                                  Xem hình ảnh
+                                </a>
+                                <div className="mt-1 overflow-hidden rounded-md border border-gray-200">
+                                  <img
+                                    src={word.imageUrl}
+                                    alt={`Hình ảnh minh họa cho ${word.term}`}
+                                    className="h-20 w-auto object-cover"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {word.videoUrl && (
+                              <div className="flex flex-col gap-1">
+                                <a
+                                  href={word.videoUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:underline"
+                                >
+                                  Xem video
+                                </a>
+                                <div className="mt-1 overflow-hidden rounded-md border border-gray-200">
+                                  <iframe
+                                    src={word.videoUrl}
+                                    title={`Video minh họa cho ${word.term}`}
+                                    className="aspect-video h-20 w-full"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  ></iframe>
+                                </div>
+                              </div>
+                            )}
+                            {word.audioUrl && (
+                              <div className="flex flex-col gap-1">
+                                <button
+                                  onClick={() =>
+                                    handlePlayAudio(word.audioUrl!)
+                                  }
+                                  className="inline-flex items-center gap-1 text-blue-500 hover:underline"
+                                >
+                                  <Volume2
+                                    className={`h-4 w-4 ${
+                                      currentUrl === word.audioUrl && isPlaying
+                                        ? "text-game-primary"
+                                        : ""
+                                    }`}
+                                  />
+                                  {currentUrl === word.audioUrl && isPlaying
+                                    ? "Đang phát..."
+                                    : "Nghe phát âm"}
+                                </button>
+                              </div>
+                            )}
+                            {!word.imageUrl &&
+                              !word.videoUrl &&
+                              !word.audioUrl &&
+                              "Không có"}
+                          </div>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan={4}
+                        colSpan={5}
                         className="px-4 py-6 text-center text-game-accent/70"
                       >
                         Bạn chưa học từ vựng nào trong khóa học này

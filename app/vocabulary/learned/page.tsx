@@ -3,7 +3,20 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search, Filter, BookOpen, Check, X, Eye, Clock } from "lucide-react";
+import {
+  Search,
+  Filter,
+  BookOpen,
+  Check,
+  X,
+  Eye,
+  Clock,
+  Image,
+  Video,
+  Volume2,
+  Info,
+  Plus,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +50,14 @@ import Navigation from "@/components/navigation";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { toast } from "react-hot-toast";
+import { useAudio } from "@/app/vocabulary/learn/[id]/_hooks/useAudio";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Đăng ký plugins
 dayjs.extend(relativeTime);
@@ -74,13 +95,17 @@ interface Category {
 interface LearnedWord {
   wordId: number;
   word: string;
-  pronunciation?: string;
+  pronunciation?: string | null;
   definition: string;
-  exampleSentence?: string;
-  partOfSpeech?: string;
+  exampleSentence?: string | null;
+  partOfSpeech?: string | null;
   category?: Category;
   categoryId: number;
-  stats: WordStats;
+  stats?: WordStats;
+  addedAt?: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
+  audioUrl?: string | null;
 }
 
 interface LearnedWordsData {
@@ -105,6 +130,9 @@ export default function LearnedVocabularyPage() {
   );
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [previewWord, setPreviewWord] = useState<any>(null);
+  const [reviewWords, setReviewWords] = useState<LearnedWord[]>([]);
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
+  const { isPlaying, currentUrl, play, stop } = useAudio();
 
   // Lấy thống kê tổng quan về từ vựng đã học
   const { data: learnedStats, isLoading: isStatsLoading } =
@@ -133,6 +161,35 @@ export default function LearnedVocabularyPage() {
       enabled: true,
     }
   );
+
+  // Thêm mutation để thêm/xóa từ vựng khỏi danh sách ôn tập
+  const addToReviewMutation = trpc.userReviewWords.addToReview.useMutation({
+    onSuccess: () => {
+      toast.success("Đã thêm từ vựng vào danh sách ôn tập");
+      refetchReviewWords();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const removeFromReviewMutation =
+    trpc.userReviewWords.removeFromReview.useMutation({
+      onSuccess: () => {
+        toast.success("Đã xóa từ vựng khỏi danh sách ôn tập");
+        refetchReviewWords();
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    });
+
+  // Thêm query để lấy danh sách từ vựng cần ôn tập
+  const { data: reviewWordsData, refetch: refetchReviewWords } =
+    trpc.userReviewWords.getReviewWords.useQuery({
+      page: 1,
+      limit: 100,
+    });
 
   // Theo dõi thay đổi tham số và cập nhật URL
   useEffect(() => {
@@ -171,6 +228,29 @@ export default function LearnedVocabularyPage() {
     setShowPreviewDialog(true);
   };
 
+  // Xử lý thêm từ vựng vào danh sách ôn tập
+  const handleAddToReview = (word: LearnedWord) => {
+    addToReviewMutation.mutate({ wordId: word.wordId });
+  };
+
+  // Xử lý xóa từ vựng khỏi danh sách ôn tập
+  const handleRemoveFromReview = (wordId: number) => {
+    removeFromReviewMutation.mutate({ wordId });
+  };
+
+  // Xử lý bắt đầu ôn tập
+  const handleStartReview = () => {
+    if (reviewWordsData?.words && reviewWordsData.words.length > 0) {
+      setReviewWords(reviewWordsData.words);
+      setShowReviewDialog(true);
+    }
+  };
+
+  // Xử lý phát âm thanh
+  const handlePlayAudio = (audioUrl: string) => {
+    play(audioUrl);
+  };
+
   // Tính tổng số trang
   const totalPages = Math.ceil((learnedWordsData?.total || 0) / 10);
 
@@ -197,7 +277,7 @@ export default function LearnedVocabularyPage() {
   );
 
   // Loading state
-  if (isStatsLoading || isCategoriesLoading) {
+  if (isStatsLoading || isCategoriesLoading || isLearnedWordsLoading) {
     return (
       <div className="min-h-screen bg-game-background">
         <Navigation />
@@ -227,7 +307,7 @@ export default function LearnedVocabularyPage() {
         </div>
 
         {/* Thống kê tổng quan */}
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
           <Card className="bg-white shadow-sm">
             <CardHeader className="pb-2">
               <CardDescription>Tổng số từ đã học</CardDescription>
@@ -246,23 +326,53 @@ export default function LearnedVocabularyPage() {
             </CardHeader>
           </Card>
 
-          <Card className="bg-white shadow-sm">
+          <Card className="md:col-span-2 bg-white shadow-sm">
             <CardHeader className="pb-2">
-              <CardDescription>Tiến độ trung bình</CardDescription>
-              <CardTitle className="text-3xl font-bold text-game-primary">
-                {learnedStats?.categoriesStats &&
-                learnedStats.categoriesStats.length > 0
-                  ? Math.round(
-                      // @ts-ignore - Bỏ qua type checking cho reduce function
-                      learnedStats.categoriesStats.reduce(
-                        (acc, cat) => acc + (cat?.progress || 0),
-                        0
-                      ) / learnedStats.categoriesStats.length
-                    )
-                  : 0}
-                %
-              </CardTitle>
+              <CardDescription>
+                Từ vựng cần ôn tập ({reviewWordsData?.total || 0})
+              </CardDescription>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {reviewWordsData?.words && reviewWordsData.words.length > 0 ? (
+                  reviewWordsData.words.slice(0, 6).map((word) => (
+                    <Badge
+                      key={word.wordId}
+                      variant="outline"
+                      className="flex items-center gap-1 py-1 pl-2 pr-1 bg-game-primary/10 text-game-primary"
+                    >
+                      {word.word}
+                      <button
+                        className="ml-1 rounded-full p-0.5 hover:bg-red-100 transition-colors"
+                        onClick={() => handleRemoveFromReview(word.wordId)}
+                      >
+                        <X className="h-3 w-3 text-red-500" />
+                      </button>
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    Chưa có từ vựng nào cần ôn tập
+                  </p>
+                )}
+                {reviewWordsData?.total && reviewWordsData.total > 6 && (
+                  <Badge
+                    variant="outline"
+                    className="bg-gray-100 cursor-pointer hover:bg-gray-200"
+                    onClick={() => setShowReviewDialog(true)}
+                  >
+                    +{reviewWordsData.total - 6} từ khác
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
+            <CardFooter>
+              <Button
+                className="w-full bg-game-primary hover:bg-game-primary/90"
+                onClick={handleStartReview}
+                disabled={!reviewWordsData?.total}
+              >
+                Bắt đầu ôn tập
+              </Button>
+            </CardFooter>
           </Card>
         </div>
 
@@ -340,15 +450,44 @@ export default function LearnedVocabularyPage() {
                     {learnedWordsData?.words?.map((word) => (
                       <tr key={word.wordId} className="bg-white">
                         <td className="whitespace-nowrap px-4 py-3 text-game-accent">
-                          <div className="font-medium">{word.word}</div>
-                          <div className="text-xs text-gray-500">
-                            {word.pronunciation}
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <div className="font-medium">{word.word}</div>
+                              <div className="text-xs text-gray-500">
+                                {word.pronunciation}
+                              </div>
+                            </div>
+                            {word.audioUrl && (
+                              <button
+                                onClick={() => handlePlayAudio(word.audioUrl!)}
+                                className="rounded-full p-1 hover:bg-gray-100"
+                                title="Nghe phát âm"
+                              >
+                                <Volume2
+                                  className={`h-4 w-4 ${
+                                    currentUrl === word.audioUrl && isPlaying
+                                      ? "text-game-primary"
+                                      : "text-gray-400"
+                                  }`}
+                                />
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-game-accent">
-                          <div className="max-w-xs truncate">
-                            {word.definition}
-                          </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="max-w-xs truncate cursor-help">
+                                  {word.definition}
+                                  <Info className="ml-1 inline-block h-3 w-3 text-gray-400" />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{word.definition}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </td>
                         <td className="px-4 py-3 text-game-accent">
                           {word.category?.categoryName}
@@ -360,33 +499,62 @@ export default function LearnedVocabularyPage() {
                               className="border-green-500/30 bg-green-50 text-green-600"
                             >
                               <Check className="mr-1 h-3 w-3" />{" "}
-                              {word.stats.correctCount}
+                              {word.stats?.correctCount || 0}
                             </Badge>
                             <Badge
                               variant="outline"
                               className="border-red-500/30 bg-red-50 text-red-600"
                             >
                               <X className="mr-1 h-3 w-3" />{" "}
-                              {word.stats.incorrectCount}
+                              {word.stats?.incorrectCount || 0}
                             </Badge>
                             <Badge
                               variant="outline"
                               className="border-gray-400/30 bg-gray-50 text-gray-600"
                             >
-                              <Clock className="mr-1 h-3 w-3" />{" "}
-                              {dayjs(word.stats.lastAnswered).fromNow()}
+                              {/* <Clock className="mr-1 h-3 w-3" />{" "}
+                              {word.stats?.lastAnswered
+                                ? dayjs(word.stats.lastAnswered).fromNow()
+                                : "N/A"} */}
                             </Badge>
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 border-game-primary/30 text-game-primary hover:bg-game-primary/10"
-                            onClick={() => handlePreview(word)}
-                          >
-                            <Eye className="mr-1 h-3 w-3" /> Xem
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePreview(word)}
+                              className="flex items-center justify-center w-10 h-10 min-w-10 p-0"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {reviewWordsData?.words?.some(
+                              (w) => w.wordId === word.wordId
+                            ) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleRemoveFromReview(word.wordId)
+                                }
+                                className="border-red-200 bg-red-50 hover:bg-red-100 text-red-600 min-w-[140px] flex items-center justify-center"
+                              >
+                                <X className="mr-1 h-4 w-4" />
+                                Xóa khỏi ôn tập
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAddToReview(word)}
+                                className="bg-game-primary hover:bg-game-primary/90 text-white min-w-[140px] flex items-center justify-center"
+                              >
+                                <Plus className="mr-1 h-4 w-4" />
+                                Thêm vào ôn tập
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -435,7 +603,19 @@ export default function LearnedVocabularyPage() {
                   <p className="mb-1 text-sm font-medium text-gray-500">
                     Nghĩa:
                   </p>
-                  <p className="text-game-accent">{previewWord?.definition}</p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-game-accent cursor-help">
+                          {previewWord?.definition}
+                          <Info className="ml-1 inline-block h-3 w-3 text-gray-400" />
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{previewWord?.definition}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
 
                 {previewWord?.partOfSpeech && (
@@ -454,15 +634,22 @@ export default function LearnedVocabularyPage() {
                     <p className="mb-1 text-sm font-medium text-gray-500">
                       Ví dụ:
                     </p>
-                    <p
-                      className="text-game-accent/70"
-                      dangerouslySetInnerHTML={{
-                        __html: previewWord.exampleSentence.replace(
-                          "____",
-                          `<span class="font-bold text-game-primary">${previewWord.word}</span>`
-                        ),
-                      }}
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="text-game-accent/70 cursor-help">
+                            {previewWord.exampleSentence.replace(
+                              "____",
+                              `<span class="font-bold text-game-primary">${previewWord.word}</span>`
+                            )}
+                            <Info className="ml-1 inline-block h-3 w-3 text-gray-400" />
+                          </p>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{previewWord.exampleSentence}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 )}
 
@@ -482,6 +669,90 @@ export default function LearnedVocabularyPage() {
                 Thống kê học tập
               </h3>
               <div className="rounded-lg bg-gray-50 p-4">
+                {/* Media section */}
+                {(previewWord?.imageUrl ||
+                  previewWord?.videoUrl ||
+                  previewWord?.audioUrl) && (
+                  <div className="mb-4">
+                    <p className="mb-2 text-sm font-medium text-gray-500">
+                      Media:
+                    </p>
+                    <div className="flex flex-col gap-4">
+                      {previewWord?.imageUrl && (
+                        <div>
+                          <p className="mb-1 text-sm font-medium text-gray-500">
+                            Hình ảnh:
+                          </p>
+                          <div className="relative mt-2 rounded-lg overflow-hidden bg-gray-100">
+                            <img
+                              src={previewWord.imageUrl}
+                              alt={previewWord.word}
+                              className="max-h-48 object-contain mx-auto"
+                            />
+                          </div>
+                          <div className="mt-1">
+                            <a
+                              href={previewWord.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
+                            >
+                              <Image className="h-3 w-3" />
+                              Xem hình ảnh đầy đủ
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                      {previewWord?.videoUrl && (
+                        <div>
+                          <p className="mb-1 text-sm font-medium text-gray-500">
+                            Video:
+                          </p>
+                          <div className="relative mt-2 rounded-lg overflow-hidden bg-gray-100">
+                            <iframe
+                              src={previewWord.videoUrl}
+                              className="w-full aspect-video rounded-lg"
+                              allowFullScreen
+                            ></iframe>
+                          </div>
+                        </div>
+                      )}
+                      {previewWord?.audioUrl && (
+                        <div>
+                          <p className="mb-1 text-sm font-medium text-gray-500">
+                            Âm thanh:
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              onClick={() =>
+                                handlePlayAudio(previewWord.audioUrl!)
+                              }
+                              className="inline-flex items-center justify-center gap-2 rounded-full bg-game-primary/10 p-3 text-game-primary hover:bg-game-primary/20"
+                            >
+                              {isPlaying &&
+                              currentUrl === previewWord.audioUrl ? (
+                                <span className="relative flex h-6 w-6">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-game-primary/30"></span>
+                                  <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-game-primary/40">
+                                    <Volume2 className="h-4 w-4" />
+                                  </span>
+                                </span>
+                              ) : (
+                                <Volume2 className="h-6 w-6" />
+                              )}
+                            </button>
+                            <span className="text-sm text-gray-500">
+                              {isPlaying && currentUrl === previewWord.audioUrl
+                                ? "Đang phát..."
+                                : "Nhấn để nghe phát âm"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {previewWord?.stats && (
                   <>
                     <div className="mb-4 grid grid-cols-2 gap-2">
@@ -532,16 +803,27 @@ export default function LearnedVocabularyPage() {
                       <p className="mb-1 text-sm font-medium text-gray-500">
                         Lần trả lời gần nhất:
                       </p>
-                      <p className="font-medium text-game-accent">
-                        {dayjs(previewWord.stats.lastAnswered).format(
-                          "DD/MM/YYYY HH:mm"
-                        )}
-                        <span className="ml-2 text-sm text-gray-500">
-                          ({dayjs(previewWord.stats.lastAnswered).fromNow()})
-                        </span>
-                      </p>
+                      {previewWord.stats.lastAnswered ? (
+                        <p className="font-medium text-game-accent">
+                          {dayjs(previewWord.stats.lastAnswered).format(
+                            "DD/MM/YYYY HH:mm"
+                          )}
+                          <span className="ml-2 text-sm text-gray-500">
+                            ({dayjs(previewWord.stats.lastAnswered).fromNow()})
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="font-medium text-gray-500">
+                          Chưa có dữ liệu
+                        </p>
+                      )}
                     </div>
                   </>
+                )}
+                {!previewWord?.stats && (
+                  <div className="text-center py-4 text-gray-500">
+                    Chưa có thông tin thống kê cho từ vựng này
+                  </div>
                 )}
               </div>
             </div>
@@ -563,6 +845,72 @@ export default function LearnedVocabularyPage() {
             >
               Đi đến khóa học
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog ôn tập từ vựng */}
+      <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Ôn tập từ vựng</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {reviewWords.map((word, index) => (
+              <Card key={word.wordId} className="mb-4">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">{word.word}</h3>
+                      <p className="text-sm text-gray-500">
+                        {word.pronunciation}
+                      </p>
+                      <p className="mt-2">{word.definition}</p>
+                      {word.exampleSentence && (
+                        <p className="mt-2 text-sm text-gray-600">
+                          Ví dụ: {word.exampleSentence}
+                        </p>
+                      )}
+                      {word.category && (
+                        <div className="mt-2">
+                          <Badge className="bg-game-primary/10 text-game-primary">
+                            {word.category.categoryName}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRemoveFromReview(word.wordId)}
+                      >
+                        Xóa khỏi ôn tập
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowReviewDialog(false)}
+            >
+              Đóng
+            </Button>
+            {reviewWords.length > 0 && (
+              <Button
+                className="game-button"
+                onClick={() => {
+                  setShowReviewDialog(false);
+                  router.push("/vocabulary/review-session");
+                }}
+              >
+                Bắt đầu ôn tập
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

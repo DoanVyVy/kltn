@@ -78,7 +78,13 @@ export default function CourseManagement() {
   };
 
   const handleUpdate = async (data: any) => {
-    await updateMutation.mutateAsync(data);
+    if (!currentCourse) return;
+
+    await updateMutation.mutateAsync({
+      categoryId: currentCourse.categoryId,
+      ...data,
+      isVocabularyCourse: currentCourse.isVocabularyCourse,
+    });
   };
 
   const handleDelete = async (id: number) => {
@@ -87,6 +93,7 @@ export default function CourseManagement() {
 
   const openEditDialog = (course: Category) => {
     setCurrentCourse(course);
+    setCourseType(course.isVocabularyCourse ? "vocabulary" : "grammar");
     setDialog("edit");
   };
 
@@ -116,7 +123,10 @@ export default function CourseManagement() {
         </div>
         <Button
           className="flex items-center gap-2 bg-game-primary hover:bg-game-primary/90"
-          onClick={() => setDialog("add")}
+          onClick={() => {
+            setCurrentCourse(null);
+            setDialog("add");
+          }}
         >
           <PlusCircle size={16} />
           Thêm khóa học mới

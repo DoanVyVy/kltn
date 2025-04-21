@@ -1,72 +1,72 @@
 import { useState } from "react";
 import { trpc } from "@/trpc/client";
-import useSearchDebounce from "@/hooks/useSearchDebounce";
-import { VocabularyWordListElement } from "@/routers/vocabulary_word.route";
+import { toast } from "sonner";
+import { VocabularyWord } from "@prisma/client";
 
 export default function useVocabulary() {
-  const {
-    setValue: setSearchTerm,
-    value: searchTerm,
-    debouncedValue: debouncedSearchTerm,
-  } = useSearchDebounce({ delay: 1000 });
-
-  const [selectedCourse, setSelectedCourse] = useState<string>("all");
-  const [currentWord, setCurrentWord] =
-    useState<VocabularyWordListElement | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [page, setPage] = useState(1);
-  const [dialog, setDialog] = useState<"edit" | "delete" | "add" | null>(null);
-  const limit = 10;
+  const [limit] = useState(10);
+  const [currentVocabulary, setCurrentVocabulary] =
+    useState<VocabularyWord | null>(null);
+  const [currentDialog, setCurrentDialog] = useState<
+    "add" | "edit" | "delete" | "import" | null
+  >(null);
 
-  const { data: vocabulary, isLoading } = trpc.vocabulary.getAll.useQuery({
-    limit,
-    page,
-    search: debouncedSearchTerm,
-    categoryId: selectedCourse !== "all" ? parseInt(selectedCourse) : undefined,
+  // Fetch categories
+  const { data: categories } = trpc.category.getValidCategories.useQuery({
+    isVocabularyCourse: true,
+    status: "active",
   });
 
-  const { data: categories = [], isLoading: isLoadingCategories } =
-    trpc.category.getValidCategories.useQuery({
-      isVocabularyCourse: true,
-    });
+  // Fetch vocabularies
+  const {
+    data: vocabularies,
+    isLoading,
+    refetch,
+  } = trpc.vocabulary.getAll.useQuery({
+    page,
+    limit,
+    search: searchTerm || undefined,
+    categoryId:
+      selectedCategory !== "all" ? parseInt(selectedCategory) : undefined,
+  });
 
-  const courses = categories;
-
-  const openEditDialog = (word: VocabularyWordListElement) => {
-    setCurrentWord(word);
-    setDialog("edit");
+  const openEditDialog = (vocabulary: VocabularyWord) => {
+    setCurrentVocabulary(vocabulary);
+    setCurrentDialog("edit");
   };
 
-  const openDeleteDialog = (word: VocabularyWordListElement) => {
-    setCurrentWord(word);
-    setDialog("delete");
+  const openDeleteDialog = (vocabulary: VocabularyWord) => {
+    setCurrentVocabulary(vocabulary);
+    setCurrentDialog("delete");
   };
 
-  const playAudio = (url: string) => {
-    if (url) {
-      const audio = new Audio(url);
-      audio.play();
-    }
+  const refreshData = () => {
+    refetch();
+    setCurrentDialog(null);
   };
 
   return {
-    vocabulary,
+    vocabularies: vocabularies || [],
     isLoading,
-    currentWord,
+    currentVocabulary,
     searchTerm,
     setSearchTerm,
-    selectedCourse,
-    setSelectedCourse,
-    courses,
+    selectedCategory,
+    setSelectedCategory,
+    categories: categories || [],
     page,
     setPage,
     limit,
-    setCurrentWord,
     openEditDialog,
     openDeleteDialog,
-    playAudio,
-    isOpenEditDialog: dialog === "edit",
-    isOpenDeleteDialog: dialog === "delete",
-    isOpenAddDialog: dialog === "add",
-    setCurrentDialog: setDialog,
+    isOpenEditDialog: currentDialog === "edit",
+    isOpenDeleteDialog: currentDialog === "delete",
+    isOpenAddDialog: currentDialog === "add",
+    isOpenImportDialog: currentDialog === "import",
+    setCurrentDialog,
+    refreshData,
   };
 }

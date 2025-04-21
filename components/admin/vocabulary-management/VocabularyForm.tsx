@@ -10,6 +10,13 @@ import {
 import DefinitionFields from "./DefinitionFields";
 import { useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { HelpCircle } from "lucide-react";
 
 interface VocabularyFormProps {
   onSubmit: (data: CreateVocabularyInput) => void;
@@ -87,6 +94,16 @@ export default function VocabularyForm({
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="word" className="text-right">
             Từ vựng
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Nhập từ vựng cần thêm</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </Label>
           <div className="col-span-3">
             <Input
@@ -102,6 +119,16 @@ export default function VocabularyForm({
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="categoryId" className="text-right">
             Khóa học
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Chọn khóa học cho từ vựng</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </Label>
           <div className="col-span-3">
             <Controller
@@ -135,6 +162,16 @@ export default function VocabularyForm({
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="phonetic" className="text-right">
             Phiên âm
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Nhập phiên âm của từ vựng</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </Label>
           <div className="col-span-3">
             <Input
@@ -156,6 +193,16 @@ export default function VocabularyForm({
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="audioUrl" className="text-right">
             URL âm thanh
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Nhập URL của file âm thanh phát âm</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </Label>
           <div className="col-span-3">
             <Input
@@ -176,8 +223,82 @@ export default function VocabularyForm({
         </div>
 
         <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="imageUrl" className="text-right">
+            URL hình ảnh
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Nhập URL của hình ảnh minh họa</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </Label>
+          <div className="col-span-3">
+            <Input
+              id="imageUrl"
+              {...register("imageUrl")}
+              className={errors.imageUrl ? "border-red-500" : ""}
+              placeholder="https://example.com/image.jpg"
+            />
+            {errors.imageUrl && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.imageUrl.message}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Nhập đường dẫn đến hình ảnh minh họa từ vựng (JPG, PNG)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="videoUrl" className="text-right">
+            URL video
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Nhập URL của video minh họa</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </Label>
+          <div className="col-span-3">
+            <Input
+              id="videoUrl"
+              {...register("videoUrl")}
+              className={errors.videoUrl ? "border-red-500" : ""}
+              placeholder="https://example.com/video.mp4"
+            />
+            {errors.videoUrl && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.videoUrl.message}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Nhập đường dẫn đến video minh họa từ vựng (MP4, WebM)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="difficultyLevel" className="text-right">
             Cấp độ khó
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle size={14} className="text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Chọn độ khó của từ vựng</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </Label>
           <div className="col-span-3">
             <Controller
@@ -238,7 +359,28 @@ export default function VocabularyForm({
 
         <div className="border-t pt-4 mt-2">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium">Định nghĩa</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-medium">Định nghĩa</h3>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle size={14} className="text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      Thêm các định nghĩa và ví dụ cho từ vựng. Mỗi định nghĩa
+                      bao gồm:
+                    </p>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>Loại từ (danh từ, động từ, tính từ...)</li>
+                      <li>Định nghĩa tiếng Anh</li>
+                      <li>Định nghĩa tiếng Việt</li>
+                      <li>Ví dụ minh họa</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Button
               type="button"
               variant="outline"

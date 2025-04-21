@@ -23,6 +23,9 @@ export default function GrammarTable({
   onEdit,
   onDelete,
 }: GrammarTableProps) {
+  console.log("Table Data:", data);
+  console.log("Table Loading:", isLoading);
+
   // Hiển thị trạng thái loading
   if (isLoading) {
     return (

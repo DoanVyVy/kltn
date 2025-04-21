@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/server-auth";
 import { baseProcedure, createTRPCRouter } from "./init";
 import { z } from "zod";
 

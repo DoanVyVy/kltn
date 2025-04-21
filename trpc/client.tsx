@@ -30,11 +30,7 @@ function getUrl() {
   return `${base}/api/trpc`;
 }
 
-export function TRPCProvider(
-  props: Readonly<{
-    children: React.ReactNode;
-  }>
-) {
+export function TRPCProvider({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
   const [trpcClient] = useState(() =>
     trpc.createClient({
@@ -47,9 +43,7 @@ export function TRPCProvider(
   );
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        {props.children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
 }

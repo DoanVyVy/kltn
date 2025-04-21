@@ -32,25 +32,12 @@ import {
 } from "@/schema/category";
 import { Category } from "@prisma/client";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Label } from "@/components/ui/label";
-
-const courseSchema = z.object({
-  categoryName: z.string().min(1, "Tên khóa học không được để trống"),
-  description: z.string().optional(),
-  difficultyLevel: z.number().min(1, "Cấp độ phải lớn hơn 0"),
-  orderIndex: z.number().min(0, "Thứ tự phải lớn hơn hoặc bằng 0"),
-});
-
-type CourseFormData = z.infer<typeof courseSchema>;
 
 interface EditCourseDialogProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   currentCourse: Category | null;
-  onSubmit: (data: CourseFormData & { categoryId: number }) => void;
+  onSubmit: (data: CreateCategoryInput & { categoryId: number }) => void;
 }
 
 export default function EditCourseDialog({
@@ -59,27 +46,25 @@ export default function EditCourseDialog({
   currentCourse,
   onSubmit,
 }: EditCourseDialogProps) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<CourseFormData>({
-    resolver: zodResolver(courseSchema),
-    defaultValues: {
-      categoryName: currentCourse?.categoryName || "",
-      description: currentCourse?.description || "",
-      difficultyLevel: currentCourse?.difficultyLevel || 1,
-      orderIndex: currentCourse?.orderIndex || 0,
-    },
-  });
+  const { form, resetForm } = useCourseForm(currentCourse);
 
-  const handleFormSubmit = (data: CourseFormData) => {
+  useEffect(() => {
     if (currentCourse) {
-      onSubmit({
-        ...data,
-        categoryId: currentCourse.categoryId,
+      form.reset({
+        title: currentCourse.categoryName,
+        description: currentCourse.description || "",
+        difficulty: currentCourse.difficultyLevel,
+        status: currentCourse.status as any,
       });
     }
+  }, [currentCourse, form]);
+
+  const handleSubmit = (data: CreateCategoryInput) => {
+    if (!currentCourse) return;
+    onSubmit({
+      ...data,
+      categoryId: currentCourse.categoryId,
+    });
   };
 
   return (
@@ -89,90 +74,105 @@ export default function EditCourseDialog({
           <DialogTitle>Chỉnh sửa khóa học</DialogTitle>
           <DialogDescription>Cập nhật thông tin cho khóa học</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="categoryName">Tên khóa học</Label>
-            <Input
-              id="categoryName"
-              {...register("categoryName")}
-              placeholder="Nhập tên khóa học"
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-4"
+          >
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tên khóa học</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nhập tên khóa học" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.categoryName && (
-              <p className="text-sm text-red-500">
-                {errors.categoryName.message}
-              </p>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Mô tả</Label>
-            <Textarea
-              id="description"
-              {...register("description")}
-              placeholder="Nhập mô tả khóa học"
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Mô tả</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Nhập mô tả khóa học" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="difficultyLevel">Cấp độ</Label>
-            <Input
-              id="difficultyLevel"
-              type="number"
-              {...register("difficultyLevel", { valueAsNumber: true })}
-              placeholder="Nhập cấp độ"
+            <FormField
+              control={form.control}
+              name="difficulty"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cấp độ</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(Number(value))}
+                    defaultValue={field.value?.toString()}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn cấp độ" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {Object.entries(DifficultyDisplay).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.difficultyLevel && (
-              <p className="text-sm text-red-500">
-                {errors.difficultyLevel.message}
-              </p>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="orderIndex">Thứ tự</Label>
-            <Input
-              id="orderIndex"
-              type="number"
-              {...register("orderIndex", { valueAsNumber: true })}
-              placeholder="Nhập thứ tự"
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Trạng thái</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn trạng thái" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="draft">Bản nháp</SelectItem>
+                      <SelectItem value="active">Hoạt động</SelectItem>
+                      <SelectItem value="archived">Lưu trữ</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.orderIndex && (
-              <p className="text-sm text-red-500">
-                {errors.orderIndex.message}
-              </p>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="status">Trạng thái</Label>
-            <Select
-              onValueChange={(value) => {
-                // Handle status change
-              }}
-              defaultValue="draft"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Bản nháp</SelectItem>
-                <SelectItem value="active">Hoạt động</SelectItem>
-                <SelectItem value="archived">Lưu trữ</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsOpen(false)}
-            >
-              Hủy
-            </Button>
-            <Button type="submit">Lưu</Button>
-          </div>
-        </form>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsOpen(false)}
+              >
+                Hủy
+              </Button>
+              <Button type="submit">Lưu</Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

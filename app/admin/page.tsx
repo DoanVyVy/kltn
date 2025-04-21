@@ -9,9 +9,14 @@ import {
   Users,
   LayoutDashboard,
 } from "lucide-react";
-import { VocabularyManagement, GrammarManagement } from "@/components/admin";
+import {
+  VocabularyManagement,
+  GrammarManagement,
+  UserManagement,
+} from "@/components/admin";
 import AdminDashboard from "@/components/admin/admin-dashboard";
-import CourseManagement from "@/components/admin/course-management";
+import CourseManagement from "@/components/admin/course-management/index";
+import GameDataManagement from "@/components/admin/game-data-management";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -60,6 +65,10 @@ export default function AdminPage() {
           <AdminDashboard />
         </TabsContent>
 
+        <TabsContent value="users">
+          <UserManagement />
+        </TabsContent>
+
         <TabsContent value="courses">
           <CourseManagement />
         </TabsContent>
@@ -70,6 +79,10 @@ export default function AdminPage() {
 
         <TabsContent value="grammar">
           <GrammarManagement />
+        </TabsContent>
+
+        <TabsContent value="games">
+          <GameDataManagement />
         </TabsContent>
       </Tabs>
     </div>

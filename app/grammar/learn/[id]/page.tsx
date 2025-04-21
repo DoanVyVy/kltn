@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -15,6 +16,7 @@ import {
   Edit,
   Info,
   Lightbulb,
+  BookOpenCheck,
 } from "lucide-react";
 import {
   Card,
@@ -41,20 +43,36 @@ import { trpc } from "@/trpc/client";
 import Navigation from "@/components/navigation";
 import { useToast } from "@/components/ui/use-toast";
 
-// Tự tạo component ConfettiExplosion đơn giản thay thế
-const ConfettiExplosion = (props: {
-  force?: number;
-  duration?: number;
-  particleCount?: number;
-  width?: number;
-}) => {
-  return (
-    <div className="relative w-full h-full">
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-4xl">🎉</div>
-      </div>
-    </div>
-  );
+// Import new components
+import { GrammarFlashcard } from "./_components/Flashcard";
+import { GrammarGame } from "./_components/Flashcard/GrammarGame";
+import confetti from 'canvas-confetti';
+
+// Định nghĩa kiểu dữ liệu
+interface Grammar {
+  contentId: number;
+  categoryId: number;
+  title: string;
+  explanation: string;
+  examples?: string;
+  notes?: string;
+  orderIndex?: number;
+}
+
+interface Category {
+  categoryId: number;
+  categoryName: string;
+  description?: string;
+  totalGrammar: number;
+}
+
+// Tự tạo component ConfettiExplosion đơn giản
+const triggerConfetti = () => {
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    origin: { y: 0.6 }
+  });
 };
 
 export default function LearnGrammarPage() {
@@ -72,11 +90,8 @@ export default function LearnGrammarPage() {
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showExample, setShowExample] = useState(false);
-  const [practiceSentence, setPracticeSentence] = useState("");
-  const [userPracticeAnswer, setUserPracticeAnswer] = useState("");
-  const [isPracticeCorrect, setIsPracticeCorrect] = useState<boolean | null>(
-    null
-  );
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [completedGame, setCompletedGame] = useState(false);
 
   // Get grammar contents for the selected category
   const { data: grammarContents = [], isLoading: isGrammarLoading } =
@@ -96,52 +111,6 @@ export default function LearnGrammarPage() {
     return grammarContents[currentGrammarIndex];
   }, [grammarContents, currentGrammarIndex]);
 
-  // Generate example sentences for practice
-  const generateExampleSentence = () => {
-    if (!currentGrammar || !currentGrammar.examples) return "";
-
-    // Split examples by line break and filter empty lines
-    const exampleLines = currentGrammar.examples
-      .split("\n")
-      .filter((line) => line.trim().length > 0);
-
-    if (exampleLines.length === 0) return "";
-
-    // Get a random example
-    const randomIndex = Math.floor(Math.random() * exampleLines.length);
-    const example = exampleLines[randomIndex];
-
-    // Create a practice version by replacing key grammar elements with blanks
-    let practiceSentence = example;
-
-    // This is a simplified approach - in a real app, you'd want more sophisticated logic
-    // to identify the grammar pattern being taught
-    if (currentGrammar.title.includes("Tense")) {
-      // For tenses, try to blank out the verb
-      practiceSentence = example.replace(
-        /\b(is|am|are|was|were|have|has|had|will|would)\b/i,
-        "____"
-      );
-    } else if (currentGrammar.title.includes("Conditional")) {
-      // For conditionals, blank out part of the condition
-      practiceSentence = example.replace(
-        /\b(if|would|could|should|might)\b/i,
-        "____"
-      );
-    } else {
-      // General approach - blank out a word from the example
-      const words = example.split(" ");
-      const randomWordIndex = Math.floor(Math.random() * words.length);
-      if (words[randomWordIndex].length > 3) {
-        // Only blank out meaningful words
-        words[randomWordIndex] = "____";
-        practiceSentence = words.join(" ");
-      }
-    }
-
-    return practiceSentence;
-  };
-
   // Update progress to the server
   const { mutate: updateProgress } =
     trpc.userProcess.userRegisterCategory.useMutation({
@@ -158,6 +127,7 @@ export default function LearnGrammarPage() {
     if (!grammarContents || currentGrammarIndex >= grammarContents.length - 1) {
       // End of grammar contents
       setIsExploding(true);
+      triggerConfetti();
       updateProgress({
         categoryId: categoryId,
       });
@@ -178,17 +148,8 @@ export default function LearnGrammarPage() {
     setUserAnswer("");
     setShowHint(false);
     setShowExample(false);
-    setPracticeSentence("");
-    setUserPracticeAnswer("");
-    setIsPracticeCorrect(null);
-
-    // Generate a new practice sentence
-    if (activeTab === "practice") {
-      setTimeout(() => {
-        const newPracticeSentence = generateExampleSentence();
-        setPracticeSentence(newPracticeSentence);
-      }, 100);
-    }
+    setShowAnswer(false);
+    setCompletedGame(false);
   };
 
   const goToPreviousGrammar = () => {
@@ -199,60 +160,57 @@ export default function LearnGrammarPage() {
     setUserAnswer("");
     setShowHint(false);
     setShowExample(false);
-    setPracticeSentence("");
-    setUserPracticeAnswer("");
-    setIsPracticeCorrect(null);
+    setShowAnswer(false);
+    setCompletedGame(false);
+  };
 
-    // Generate a new practice sentence
-    if (activeTab === "practice") {
-      setTimeout(() => {
-        const newPracticeSentence = generateExampleSentence();
-        setPracticeSentence(newPracticeSentence);
-      }, 100);
+  // Handle user answer
+  const handleUserAnswerChange = (answer: string) => {
+    setUserAnswer(answer);
+  };
+
+  // Check user answer against grammar rules
+  const checkAnswer = () => {
+    if (!userAnswer.trim()) return;
+    
+    // Check if answer is correct based on grammar rules
+    // This is a simplified version - in a real app, you'd have more sophisticated checks
+    let isCorrect = false;
+    
+    if (currentGrammar) {
+      // Get key terms from the grammar title and content
+      const keyTerms = getKeyTermsFromGrammar(currentGrammar);
+      
+      // Check if the answer contains any of the key terms
+      isCorrect = keyTerms.some(term => 
+        userAnswer.toLowerCase().includes(term.toLowerCase())
+      );
+    }
+    
+    setIsAnswerCorrect(isCorrect);
+    setShowAnswer(true);
+    
+    if (isCorrect) {
+      triggerConfetti();
     }
   };
 
-  // Generate practice sentence when switching to practice tab
-  useEffect(() => {
-    if (activeTab === "practice" && currentGrammar) {
-      const newPracticeSentence = generateExampleSentence();
-      setPracticeSentence(newPracticeSentence);
-    }
-  }, [activeTab, currentGrammar]);
+  // Show answer directly
+  const handleShowAnswer = () => {
+    setShowAnswer(true);
+    setIsAnswerCorrect(false);
+  };
 
-  // Verify practice answer
-  const checkPracticeAnswer = () => {
-    if (!currentGrammar || !currentGrammar.examples || !practiceSentence)
-      return;
-
-    // This is a simplified approach to checking answers
-    // In a real application, you'd want more sophisticated logic
-
-    // Basic check: user input should not be empty
-    if (!userPracticeAnswer.trim()) {
-      setIsPracticeCorrect(false);
-      return;
-    }
-
-    // Very basic matching - just check if the answer contains key terms from the grammar
-    // This should be replaced with proper grammar checking in a real app
-    const keyTerms = getKeyTermsFromGrammar(currentGrammar);
-    const isCorrect = keyTerms.some((term) =>
-      userPracticeAnswer.toLowerCase().includes(term.toLowerCase())
-    );
-
-    setIsPracticeCorrect(isCorrect);
-
-    if (isCorrect) {
-      setIsExploding(true);
-      setTimeout(() => {
-        setIsExploding(false);
-      }, 2000);
+  // Handle game completion
+  const handleGameComplete = (success: boolean) => {
+    setCompletedGame(true);
+    if (success) {
+      triggerConfetti();
     }
   };
 
   // Utility function to extract key terms from grammar content
-  const getKeyTermsFromGrammar = (grammar: any) => {
+  const getKeyTermsFromGrammar = (grammar: Grammar) => {
     if (!grammar) return [];
 
     let terms: string[] = [];
@@ -337,17 +295,6 @@ export default function LearnGrammarPage() {
     <div className="min-h-screen bg-game-background">
       <Navigation />
       <main className="container mx-auto px-4 py-8">
-        {isExploding && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <ConfettiExplosion
-              force={0.8}
-              duration={3000}
-              particleCount={250}
-              width={1600}
-            />
-          </div>
-        )}
-
         <div className="mb-6 flex items-center justify-between">
           <Button
             className="flex items-center gap-2"
@@ -394,7 +341,7 @@ export default function LearnGrammarPage() {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-2 bg-game-background">
+          <TabsList className="grid w-full grid-cols-3 bg-game-background">
             <TabsTrigger
               value="learn"
               className="data-[state=active]:bg-white data-[state=active]:text-game-primary"
@@ -407,9 +354,15 @@ export default function LearnGrammarPage() {
             >
               Luyện tập
             </TabsTrigger>
+            <TabsTrigger
+              value="game"
+              className="data-[state=active]:bg-white data-[state=active]:text-game-primary"
+            >
+              Trò chơi
+            </TabsTrigger>
           </TabsList>
 
-          {/* Tab học */}
+          {/* Tab học với Flashcard mới */}
           <TabsContent value="learn" className="space-y-6">
             <AnimatePresence mode="wait">
               <motion.div
@@ -419,117 +372,43 @@ export default function LearnGrammarPage() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="game-card overflow-hidden">
-                  <CardHeader className="bg-white pb-3">
-                    <CardTitle className="text-xl text-game-accent">
-                      {currentGrammar?.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 p-6">
-                    <ScrollArea className="h-[300px] pr-4">
-                      <div className="space-y-4">
-                        {/* Giải thích ngữ pháp */}
-                        <div className="space-y-2">
-                          <h3 className="font-semibold text-game-primary">
-                            Giải thích
-                          </h3>
-                          <div className="rounded-md bg-gray-50 p-4 text-gray-800">
-                            <p style={{ whiteSpace: "pre-line" }}>
-                              {currentGrammar?.explanation}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Ví dụ */}
-                        {currentGrammar?.examples && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-semibold text-game-primary">
-                                Ví dụ
-                              </h3>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs text-gray-500"
-                                onClick={() => setShowExample(!showExample)}
-                              >
-                                {showExample ? "Ẩn" : "Hiển thị"}
-                              </Button>
-                            </div>
-
-                            {showExample && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.3 }}
-                                className="rounded-md bg-gray-50 p-4 text-gray-800"
-                              >
-                                <p style={{ whiteSpace: "pre-line" }}>
-                                  {currentGrammar?.examples}
-                                </p>
-                              </motion.div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Ghi chú */}
-                        {currentGrammar?.notes && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-semibold text-game-primary">
-                                Ghi chú
-                              </h3>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs text-gray-500"
-                                onClick={() => setShowHint(!showHint)}
-                              >
-                                {showHint ? "Ẩn" : "Hiển thị"}
-                              </Button>
-                            </div>
-
-                            {showHint && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.3 }}
-                                className="rounded-md bg-gray-50 p-4 text-gray-800"
-                              >
-                                <p style={{ whiteSpace: "pre-line" }}>
-                                  {currentGrammar?.notes}
-                                </p>
-                              </motion.div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CardContent>
-                  <CardFooter className="bg-gray-50 p-4">
-                    <div className="flex w-full items-center justify-between">
-                      <Button
-                        variant="outline"
-                        onClick={goToPreviousGrammar}
-                        disabled={currentGrammarIndex === 0}
-                        className="gap-1"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Trước
-                      </Button>
-                      <Button className="game-button" onClick={goToNextGrammar}>
-                        {currentGrammarIndex >= grammarContents.length - 1
-                          ? "Hoàn thành"
-                          : "Tiếp theo"}
-                        {currentGrammarIndex < grammarContents.length - 1 && (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </CardFooter>
-                </Card>
+                <div className="flex flex-col">
+                  <GrammarFlashcard
+                    currentGrammar={currentGrammar}
+                    currentIndex={currentGrammarIndex}
+                    showAnswer={showAnswer}
+                    userAnswer={userAnswer}
+                    isCorrect={isAnswerCorrect}
+                    onNext={goToNextGrammar}
+                    onUserAnswerChange={handleUserAnswerChange}
+                    onCheckAnswer={checkAnswer}
+                    onShowAnswer={handleShowAnswer}
+                  />
+                  
+                  <div className="mt-6 flex justify-between px-2">
+                    <Button
+                      variant="outline"
+                      onClick={goToPreviousGrammar}
+                      disabled={currentGrammarIndex === 0}
+                      className="gap-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Trước đó
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setActiveTab("game");
+                        setCompletedGame(false);
+                      }}
+                      className="gap-1 border-amber-200 text-amber-600"
+                    >
+                      <Award className="h-4 w-4" />
+                      Chơi game
+                    </Button>
+                  </div>
+                </div>
               </motion.div>
             </AnimatePresence>
           </TabsContent>
@@ -573,69 +452,71 @@ export default function LearnGrammarPage() {
                       </div>
 
                       {/* Câu luyện tập */}
-                      {practiceSentence ? (
-                        <div className="space-y-4">
+                      <div className="space-y-4">
+                        {currentGrammar?.examples ? (
                           <div className="rounded-md bg-gray-50 p-4">
-                            <p className="text-center text-lg font-medium text-gray-800">
-                              {practiceSentence}
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">
-                              Đáp án của bạn:
-                            </label>
-                            <Textarea
-                              placeholder="Nhập câu trả lời của bạn..."
-                              value={userPracticeAnswer}
-                              onChange={(e) =>
-                                setUserPracticeAnswer(e.target.value)
-                              }
-                              className="min-h-[80px] resize-none"
-                            />
-                          </div>
-
-                          {isPracticeCorrect !== null && (
-                            <div
-                              className={`mt-4 rounded-md p-3 ${
-                                isPracticeCorrect
-                                  ? "bg-green-50 text-green-700"
-                                  : "bg-red-50 text-red-700"
-                              }`}
-                            >
-                              <div className="flex items-center">
-                                {isPracticeCorrect ? (
-                                  <>
-                                    <Check className="mr-2 h-5 w-5 text-green-500" />
-                                    <p>
-                                      Chính xác! Bạn đã hiểu ngữ pháp này rồi.
-                                    </p>
-                                  </>
-                                ) : (
-                                  <>
-                                    <X className="mr-2 h-5 w-5 text-red-500" />
-                                    <p>
-                                      Chưa chính xác. Hãy thử lại hoặc xem lại
-                                      phần học.
-                                    </p>
-                                  </>
-                                )}
-                              </div>
+                            <h4 className="mb-3 font-medium text-gray-700">Các ví dụ:</h4>
+                            <div className="space-y-2">
+                              {currentGrammar.examples.split("\n")
+                                .filter(line => line.trim().length > 0)
+                                .slice(0, 3)
+                                .map((example, idx) => (
+                                  <p key={idx} className="text-gray-800">{example}</p>
+                                ))}
                             </div>
-                          )}
+                          </div>
+                        ) : (
+                          <div className="rounded-md bg-gray-50 p-4 text-center text-gray-500">
+                            Không có ví dụ cho điểm ngữ pháp này
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            Tạo một câu sử dụng ngữ pháp này:
+                          </label>
+                          <Textarea
+                            placeholder="Viết câu của bạn sử dụng ngữ pháp đã học..."
+                            value={userAnswer}
+                            onChange={(e) => setUserAnswer(e.target.value)}
+                            className="min-h-[120px] resize-none"
+                          />
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <Edit className="mb-3 h-12 w-12 text-gray-300" />
-                          <p className="text-gray-500">
-                            Không thể tạo câu luyện tập từ ví dụ cho ngữ pháp
-                            này.
-                          </p>
-                          <p className="mt-2 text-sm text-gray-400">
-                            Hãy xem phần học trước khi tiếp tục
-                          </p>
-                        </div>
-                      )}
+
+                        {showAnswer && (
+                          <div
+                            className={`mt-4 rounded-md p-3 ${
+                              isAnswerCorrect
+                                ? "bg-green-50 text-green-700"
+                                : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              {isAnswerCorrect ? (
+                                <>
+                                  <Check className="mr-2 h-5 w-5 text-green-500" />
+                                  <div>
+                                    <p className="font-medium">Rất tốt!</p>
+                                    <p className="text-sm">
+                                      Câu của bạn đã sử dụng đúng cấu trúc ngữ pháp.
+                                    </p>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <BookOpenCheck className="mr-2 h-5 w-5 text-amber-500" />
+                                  <div>
+                                    <p className="font-medium">Gợi ý:</p>
+                                    <p className="text-sm">
+                                      Hãy xem lại phần giải thích và thử sử dụng cấu trúc ngữ pháp "{currentGrammar?.title}" một cách đúng đắn.
+                                    </p>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                   <CardFooter className="flex justify-between bg-gray-50 p-4">
@@ -649,37 +530,30 @@ export default function LearnGrammarPage() {
                         <ChevronLeft className="h-4 w-4" />
                         Trước
                       </Button>
-
-                      {practiceSentence && (
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            const newPracticeSentence =
-                              generateExampleSentence();
-                            setPracticeSentence(newPracticeSentence);
-                            setUserPracticeAnswer("");
-                            setIsPracticeCorrect(null);
-                          }}
-                          className="gap-1"
-                        >
-                          <Timer className="h-4 w-4" />
-                          Câu mới
-                        </Button>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {practiceSentence && isPracticeCorrect === null && (
-                        <Button
-                          onClick={checkPracticeAnswer}
-                          className="game-button"
-                          disabled={!userPracticeAnswer.trim()}
-                        >
-                          Kiểm tra
-                        </Button>
+                      {!showAnswer && (
+                        <>
+                          <Button
+                            variant="outline"
+                            onClick={handleShowAnswer}
+                            className="border-blue-200 text-blue-600"
+                          >
+                            <Info className="mr-2 h-4 w-4" />
+                            Xem gợi ý
+                          </Button>
+                          <Button
+                            onClick={checkAnswer}
+                            className="game-button"
+                            disabled={!userAnswer.trim()}
+                          >
+                            Kiểm tra
+                          </Button>
+                        </>
                       )}
 
-                      {(isPracticeCorrect !== null || !practiceSentence) && (
+                      {showAnswer && (
                         <Button
                           className="game-button"
                           onClick={goToNextGrammar}
@@ -688,13 +562,57 @@ export default function LearnGrammarPage() {
                             ? "Hoàn thành"
                             : "Tiếp theo"}
                           {currentGrammarIndex < grammarContents.length - 1 && (
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="ml-2 h-4 w-4" />
                           )}
                         </Button>
                       )}
                     </div>
                   </CardFooter>
                 </Card>
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
+
+          {/* Tab trò chơi */}
+          <TabsContent value="game" className="space-y-6">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`game-${currentGrammarIndex}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex flex-col">
+                  <GrammarGame 
+                    grammar={currentGrammar}
+                    onComplete={handleGameComplete}
+                  />
+                  
+                  {completedGame && (
+                    <div className="mt-6 flex justify-between px-2">
+                      <Button
+                        variant="outline"
+                        onClick={goToPreviousGrammar}
+                        disabled={currentGrammarIndex === 0}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Trước đó
+                      </Button>
+                      
+                      <Button
+                        className="game-button"
+                        onClick={goToNextGrammar}
+                      >
+                        {currentGrammarIndex >= grammarContents.length - 1
+                          ? "Hoàn thành"
+                          : "Tiếp theo"}
+                        <ChevronRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             </AnimatePresence>
           </TabsContent>

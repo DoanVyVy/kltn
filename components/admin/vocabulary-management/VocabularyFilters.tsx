@@ -12,17 +12,17 @@ import {
 interface VocabularyFiltersProps {
   searchTerm: string;
   setSearchTerm: (value: string) => void;
-  selectedCourse: string;
-  setSelectedCourse: (value: string) => void;
-  courses: any[] | undefined;
+  selectedCategory: string;
+  setSelectedCategory: (value: string) => void;
+  categories: any[];
 }
 
 export default function VocabularyFilters({
   searchTerm,
   setSearchTerm,
-  selectedCourse,
-  setSelectedCourse,
-  courses,
+  selectedCategory,
+  setSelectedCategory,
+  categories,
 }: VocabularyFiltersProps) {
   return (
     <CardContent className="p-4">
@@ -36,18 +36,18 @@ export default function VocabularyFilters({
             className="pl-9"
           />
         </div>
-        <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Chọn khóa học" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả khóa học</SelectItem>
-            {courses?.map((course) => (
+            {categories?.map((category) => (
               <SelectItem
-                key={course.categoryId}
-                value={course.categoryId.toString()}
+                key={category.categoryId}
+                value={category.categoryId.toString()}
               >
-                {course.categoryName}
+                {category.categoryName}
               </SelectItem>
             ))}
           </SelectContent>

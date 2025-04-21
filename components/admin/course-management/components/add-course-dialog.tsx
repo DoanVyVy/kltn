@@ -2,33 +2,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 } from "@/components/ui/select";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+	Form,
+	FormControl,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormMessage,
 } from "@/components/ui/form";
 import { useCourseForm } from "../hooks/use-course-form";
 import {
-  Difficulty,
-  DifficultyDisplay,
-  CreateCategoryInput,
+	Difficulty,
+	DifficultyDisplay,
+	CreateCategoryInput,
 } from "@/schema/category";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -74,15 +74,15 @@ export default function AddCourseDialog({
     },
   });
 
-  return (
+	return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent>
-        <DialogHeader>
+			<DialogContent>
+				<DialogHeader>
           <DialogTitle>
             Thêm khóa học {courseType === "vocabulary" ? "từ vựng" : "ngữ pháp"}{" "}
             mới
           </DialogTitle>
-        </DialogHeader>
+				</DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="categoryName">Tên khóa học</Label>
@@ -96,7 +96,7 @@ export default function AddCourseDialog({
                 {errors.categoryName.message}
               </p>
             )}
-          </div>
+									</div>
 
           <div className="space-y-2">
             <Label htmlFor="description">Mô tả</Label>
@@ -105,7 +105,7 @@ export default function AddCourseDialog({
               {...register("description")}
               placeholder="Nhập mô tả khóa học"
             />
-          </div>
+									</div>
 
           <div className="space-y-2">
             <Label htmlFor="difficultyLevel">Cấp độ</Label>
@@ -135,20 +135,20 @@ export default function AddCourseDialog({
                 {errors.orderIndex.message}
               </p>
             )}
-          </div>
+									</div>
 
           <div className="flex justify-end gap-2">
-            <Button
+							<Button
               type="button"
-              variant="outline"
+								variant="outline"
               onClick={() => setIsOpen(false)}
-            >
-              Hủy
-            </Button>
+							>
+								Hủy
+							</Button>
             <Button type="submit">Thêm</Button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+					</form>
+			</DialogContent>
+		</Dialog>
+	);
 }

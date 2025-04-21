@@ -24,11 +24,13 @@ model User {
   lastActiveDate       DateTime?             @map("last_active_date")
   createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  role                 String                @default("user") @map("role")
   userAchievements     UserAchievement[]
   userActivities       UserActivity[]
   userProgress         UserProgress[]
   leaderboardEntries   LeaderboardEntry[]
   userFlashCardAnswers UserFlashCardAnswer[]
+  userReviewWords      UserReviewWord[]
 
   @@map("users")
   @@schema("public")
@@ -99,11 +101,14 @@ model VocabularyWord {
   definition           String
   exampleSentence      String?               @map("example_sentence")
   audioUrl             String?               @map("audio_url")
+  imageUrl             String?               @map("image_url")
+  videoUrl             String?               @map("video_url")
   difficultyLevel      Int                   @default(1) @map("difficulty_level")
   category             Category              @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   gameQuestions        GameQuestion[]
   paronymWords         String[]
   userFlashCardAnswers UserFlashCardAnswer[]
+  userReviewWords      UserReviewWord[]
   definitions          Json                  @default("[]") @db.Json
 
   @@index([categoryId])
@@ -118,6 +123,8 @@ model GrammarContent {
   explanation   String
   examples      String?
   notes         String?
+  imageUrl      String?        @map("image_url")
+  videoUrl      String?        @map("video_url")
   orderIndex    Int?           @map("order_index")
   category      Category       @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   gameQuestions GameQuestion[]
@@ -237,6 +244,21 @@ model UserFlashCardAnswer {
   @@index([wordId])
   @@index([processId])
   @@map("user_flashcard_answers")
+  @@schema("public")
+}
+
+model UserReviewWord {
+  id        Int            @id @default(autoincrement())
+  userId    String         @map("user_id") @db.Uuid
+  wordId    Int            @map("word_id")
+  addedAt   DateTime       @default(now()) @map("added_at") @db.Timestamptz(6)
+  user      User           @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  word      VocabularyWord @relation(fields: [wordId], references: [wordId], onDelete: Cascade)
+
+  @@unique([userId, wordId])
+  @@index([userId])
+  @@index([wordId])
+  @@map("user_review_words")
   @@schema("public")
 }
 

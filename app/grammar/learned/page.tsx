@@ -3,7 +3,18 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search, Filter, BookOpen, Check, X, Eye, Clock } from "lucide-react";
+import {
+  Search,
+  Filter,
+  BookOpen,
+  Check,
+  X,
+  Eye,
+  Clock,
+  Info,
+  Image,
+  Video,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +49,12 @@ import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Đăng ký plugins
 dayjs.extend(relativeTime);
@@ -112,12 +129,12 @@ export default function LearnedGrammarPage() {
       isVocabularyCourse: false,
     });
 
-  // Lấy danh sách nội dung ngữ pháp theo category
+  // Lấy danh sách nội dung ngữ pháp đã học
   const {
-    data: grammarContents = [],
+    data: learnedGrammarData = { grammarContents: [], total: 0 },
     isLoading: isGrammarContentsLoading,
     refetch: refetchGrammarContents,
-  } = trpc.grammarContent.getAll.useQuery(
+  } = trpc.userLearnedWords.getLearnedGrammar.useQuery(
     {
       page: currentPage,
       limit: 10,
@@ -129,6 +146,10 @@ export default function LearnedGrammarPage() {
       enabled: true,
     }
   );
+
+  const filteredGrammarContents = learnedGrammarData.grammarContents || [];
+  const totalItems = learnedGrammarData.total || 0;
+  const totalPages = Math.ceil(totalItems / 10);
 
   // Lấy tiến trình học ngữ pháp của người dùng
   const { data: learningProgress = [], isLoading: isProgressLoading } =
@@ -177,31 +198,6 @@ export default function LearnedGrammarPage() {
       (progress) => progress.categoryId === categoryId
     );
   };
-
-  // Tính tổng số trang
-  const totalItems = Array.isArray(grammarContents)
-    ? grammarContents.length
-    : 0;
-  const totalPages = Math.ceil(totalItems / 10);
-
-  // Lọc danh sách ngữ pháp dựa trên khóa học đã đăng ký
-  const filteredGrammarContents = Array.isArray(grammarContents)
-    ? grammarContents.filter((grammar) => {
-        // Nếu không chọn category cụ thể, hiển thị tất cả ngữ pháp từ các khóa học đã đăng ký
-        if (selectedCategory === "all") {
-          return learningProgress.some(
-            (progress) => progress.categoryId === grammar.categoryId
-          );
-        }
-        // Nếu chọn category cụ thể, kiểm tra xem đã đăng ký chưa
-        return (
-          grammar.categoryId === parseInt(selectedCategory) &&
-          learningProgress.some(
-            (progress) => progress.categoryId === grammar.categoryId
-          )
-        );
-      })
-    : [];
 
   // Component hiển thị khi không có dữ liệu
   const EmptyState = () => (
@@ -394,73 +390,254 @@ export default function LearnedGrammarPage() {
           <EmptyState />
         )}
 
-        {/* Dialog xem chi tiết ngữ pháp */}
+        {/* Dialog xem trước ngữ pháp */}
         <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle className="text-xl text-game-accent">
+              <DialogTitle className="text-xl">
                 {previewGrammar?.title}
               </DialogTitle>
             </DialogHeader>
 
-            <ScrollArea className="max-h-[500px] pr-4">
-              {/* Phần chính */}
-              <div className="space-y-4 p-1">
-                {/* Chi tiết ngữ pháp */}
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-game-primary">
-                    Giải thích
-                  </h3>
-                  <div className="rounded-md bg-gray-50 p-3 text-gray-800">
-                    <p style={{ whiteSpace: "pre-line" }}>
-                      {previewGrammar?.explanation}
+            <div className="grid gap-6 py-4 md:grid-cols-2">
+              <div>
+                <h3 className="mb-2 font-medium text-game-accent">
+                  Thông tin ngữ pháp
+                </h3>
+                <div className="rounded-lg bg-gray-50 p-4">
+                  {/* Phần hiển thị thông tin ngữ pháp */}
+                  <div className="mb-4">
+                    <p className="mb-1 text-sm font-medium text-gray-500">
+                      Giải thích:
                     </p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="text-game-accent cursor-help">
+                            {previewGrammar?.explanation}
+                            <Info className="ml-1 inline-block h-3 w-3 text-gray-400" />
+                          </p>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{previewGrammar?.explanation}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
-                </div>
 
-                {/* Ví dụ */}
-                {previewGrammar?.examples && (
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-game-primary">Ví dụ</h3>
-                    <div className="rounded-md bg-gray-50 p-3 text-gray-800">
-                      <p style={{ whiteSpace: "pre-line" }}>
-                        {previewGrammar.examples}
+                  {previewGrammar?.examples && (
+                    <div className="mb-4">
+                      <p className="mb-1 text-sm font-medium text-gray-500">
+                        Ví dụ:
                       </p>
+                      <div className="space-y-2">
+                        {previewGrammar.examples
+                          .split("\n")
+                          .map((example, index) => (
+                            <TooltipProvider key={index}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <p className="text-game-accent/70 cursor-help">
+                                    {example}
+                                    <Info className="ml-1 inline-block h-3 w-3 text-gray-400" />
+                                  </p>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{example}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Ghi chú */}
-                {previewGrammar?.notes && (
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-game-primary">Ghi chú</h3>
-                    <div className="rounded-md bg-gray-50 p-3 text-gray-800">
-                      <p style={{ whiteSpace: "pre-line" }}>
-                        {previewGrammar.notes}
+                  {previewGrammar?.notes && (
+                    <div className="mb-4">
+                      <p className="mb-1 text-sm font-medium text-gray-500">
+                        Ghi chú:
                       </p>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="text-game-accent cursor-help">
+                              {previewGrammar.notes}
+                              <Info className="ml-1 inline-block h-3 w-3 text-gray-400" />
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{previewGrammar.notes}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Thông tin khóa học */}
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-game-primary">Khóa học</h3>
-                  <div className="rounded-md bg-gray-50 p-3 text-gray-800">
-                    <p>
-                      {previewGrammar?.category?.categoryName ||
-                        "Không có thông tin"}
+                  <div>
+                    <p className="mb-1 text-sm font-medium text-gray-500">
+                      Khóa học:
                     </p>
+                    <Badge className="bg-game-primary/10 text-game-primary">
+                      {previewGrammar?.category?.categoryName}
+                    </Badge>
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+
+              <div>
+                <h3 className="mb-2 font-medium text-game-accent">
+                  Media và thống kê
+                </h3>
+                <div className="rounded-lg bg-gray-50 p-4">
+                  {/* Media section */}
+                  {(previewGrammar?.imageUrl || previewGrammar?.videoUrl) && (
+                    <div className="mb-4">
+                      <p className="mb-2 text-sm font-medium text-gray-500">
+                        Media:
+                      </p>
+                      <div className="flex flex-col gap-4">
+                        {previewGrammar?.imageUrl && (
+                          <div>
+                            <p className="mb-1 text-sm font-medium text-gray-500">
+                              Hình ảnh:
+                            </p>
+                            <div className="relative mt-2 rounded-lg overflow-hidden bg-gray-100">
+                              <img
+                                src={previewGrammar.imageUrl}
+                                alt={previewGrammar.title}
+                                className="max-h-48 object-contain mx-auto"
+                              />
+                            </div>
+                            <div className="mt-1">
+                              <a
+                                href={previewGrammar.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
+                              >
+                                <Image className="h-3 w-3" />
+                                Xem hình ảnh đầy đủ
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                        {previewGrammar?.videoUrl && (
+                          <div>
+                            <p className="mb-1 text-sm font-medium text-gray-500">
+                              Video:
+                            </p>
+                            <div className="relative mt-2 rounded-lg overflow-hidden bg-gray-100">
+                              <iframe
+                                src={previewGrammar.videoUrl}
+                                className="w-full aspect-video rounded-lg"
+                                allowFullScreen
+                              ></iframe>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Thống kê */}
+                  {previewGrammar?.stats && (
+                    <div>
+                      <p className="mb-2 text-sm font-medium text-gray-500">
+                        Thống kê học tập:
+                      </p>
+                      <div className="mb-4 grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-green-50 p-3 text-center">
+                          <p className="text-sm font-medium text-green-700">
+                            Trả lời đúng
+                          </p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {previewGrammar.stats.correctCount}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-red-50 p-3 text-center">
+                          <p className="text-sm font-medium text-red-700">
+                            Trả lời sai
+                          </p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {previewGrammar.stats.incorrectCount}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <p className="mb-1 text-sm font-medium text-gray-500">
+                          Tổng số lần trả lời:
+                        </p>
+                        <p className="font-medium text-game-accent">
+                          {previewGrammar.stats.totalAnswers} lần
+                        </p>
+                      </div>
+
+                      <div className="mb-4">
+                        <p className="mb-1 text-sm font-medium text-gray-500">
+                          Tỷ lệ chính xác:
+                        </p>
+                        <p className="font-medium text-game-accent">
+                          {previewGrammar.stats.totalAnswers > 0
+                            ? Math.round(
+                                (previewGrammar.stats.correctCount /
+                                  previewGrammar.stats.totalAnswers) *
+                                  100
+                              )
+                            : 0}
+                          %
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="mb-1 text-sm font-medium text-gray-500">
+                          Lần trả lời gần nhất:
+                        </p>
+                        {previewGrammar.stats.lastAnswered ? (
+                          <p className="font-medium text-game-accent">
+                            {dayjs(previewGrammar.stats.lastAnswered).format(
+                              "DD/MM/YYYY HH:mm"
+                            )}
+                            <span className="ml-2 text-sm text-gray-500">
+                              (
+                              {dayjs(
+                                previewGrammar.stats.lastAnswered
+                              ).fromNow()}
+                              )
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="font-medium text-gray-500">
+                            Chưa có dữ liệu
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!previewGrammar?.stats && (
+                    <div className="text-center py-4 text-gray-500">
+                      Chưa có thông tin thống kê cho ngữ pháp này
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <DialogFooter>
               <Button
-                className="game-button"
+                variant="outline"
                 onClick={() => setShowPreviewDialog(false)}
               >
                 Đóng
+              </Button>
+              <Button
+                className="game-button"
+                onClick={() => {
+                  setShowPreviewDialog(false);
+                  router.push(`/grammar/${previewGrammar?.categoryId}`);
+                }}
+              >
+                Đi đến khóa học
               </Button>
             </DialogFooter>
           </DialogContent>

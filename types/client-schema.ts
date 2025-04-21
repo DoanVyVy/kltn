@@ -1,6 +1,12 @@
 // Client-side schema definitions
 // These types mirror the server-side types without importing from @trpc/server
 
+export enum UserRole {
+  USER = "user",
+  MODERATOR = "moderator",
+  ADMIN = "admin",
+}
+
 export interface GrammarTopic {
   topicId: number;
   topicName: string;
