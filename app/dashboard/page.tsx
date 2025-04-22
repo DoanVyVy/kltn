@@ -11,12 +11,7 @@ import { GameCard } from "@/components/dashboard/game-card";
 import { AchievementCard } from "@/components/dashboard/achievement-card";
 import { SectionHeader } from "@/components/dashboard/section-header";
 import { Leaderboard } from "@/components/dashboard/leaderboard";
-import {
-  GAMES,
-  ACHIEVEMENTS,
-  USER_STATS,
-  GAME_CATEGORIES,
-} from "@/lib/constants";
+import { GAME_CATEGORIES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -48,111 +43,190 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [games, setGames] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState({
+    learningStreak: 0,
+    dailyXpGoal: 100,
+    currentXp: 0,
+    totalWords: 0,
+    totalGrammarRules: 0,
+    availableGames: 5,
+  });
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  const {
-    learningStreak = userProfile?.learning_streak || 0,
-    dailyXpGoal = userProfile?.daily_xp_goal || 100,
-    currentXp = userProfile?.current_xp || 0,
-    totalWords = userProfile?.total_words || 0,
-    totalGrammarRules = userProfile?.total_grammar_rules || 0,
-  } = USER_STATS;
-
+  // Fetch all necessary data for the dashboard
   useEffect(() => {
-    const getUser = async () => {
+    const fetchDashboardData = async () => {
       try {
+        setIsLoading(true);
+
+        // Get authenticated user
         const {
           data: { user },
-          error,
+          error: authError,
         } = await supabase.auth.getUser();
-        if (error) {
+
+        if (authError) {
           toast.error("Vui lòng đăng nhập để tiếp tục");
           router.push("/login");
           return;
         }
-        setUser(user);
 
+        setUser(user);
         if (!user) return;
 
-        console.log("Auth user retrieved:", user.id);
+        // Get user profile
+        const { data: profileData, error: profileError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("email", user.email)
+          .maybeSingle();
 
-        // For development/debug only:
-        // Get a list of all tables to verify the schema
-        try {
-          const { data, error: listError } = await supabase
-            .from("users")
-            .select("*");
-
-          console.log(
-            "Users table fetch attempt:",
-            listError ? "Error" : "Success"
-          );
-          if (data) {
-            console.log(`Found ${data.length} users`);
-          }
-        } catch (e) {
-          console.error("Table check error:", e);
+        if (profileError) {
+          console.error("Error fetching user profile:", profileError);
         }
 
-        // The logs confirm userId exists but is an INTEGER type
-        // We need to manually sync with our auth system by checking for any user
-        // that matches some unique identifier like email
-        try {
-          // Try to find the user by their email address instead
-          const { data: profileByEmail, error: emailError } = await supabase
-            .from("users")
-            .select("*")
-            .eq("email", user.email)
-            .maybeSingle();
+        let profile;
+        if (profileData) {
+          profile = profileData;
+          setUserProfile(profile);
 
-          if (emailError) {
-            console.error("Email lookup error:", emailError);
-          } else if (profileByEmail) {
-            console.log("Found user by email:", profileByEmail);
-            setUserProfile(profileByEmail);
-            setIsLoading(false);
-            return;
-          }
-        } catch (emailErr) {
-          console.error("Email lookup exception:", emailErr);
+          // Set user stats based on profile data
+          setUserStats({
+            learningStreak: profile.learning_streak || 0,
+            dailyXpGoal: profile.daily_xp_goal || 100,
+            currentXp: profile.current_xp || 0,
+            totalWords: profile.total_words || 0,
+            totalGrammarRules: profile.total_grammar_rules || 0,
+            availableGames: profile.available_games || 5,
+          });
+        } else {
+          // Use fallback profile if none exists
+          profile = {
+            name: user.email?.split("@")[0] || "User",
+            email: user.email,
+            level: 1,
+            learning_streak: 0,
+            daily_xp_goal: 100,
+            current_xp: 0,
+            total_words: 0,
+            total_grammar_rules: 0,
+            available_games: 5,
+          };
+          setUserProfile(profile);
+          setUserStats({
+            learningStreak: 0,
+            dailyXpGoal: 100,
+            currentXp: 0,
+            totalWords: 0,
+            totalGrammarRules: 0,
+            availableGames: 5,
+          });
         }
 
-        // If we couldn't find by email, create a fallback profile
-        const fallbackProfile = {
-          name: user.email?.split("@")[0] || "User",
-          email: user.email,
-          level: 1,
-          learning_streak: 0,
-          daily_xp_goal: 100,
-          current_xp: 0,
-          total_words: 0,
-          total_grammar_rules: 0,
-          available_games: 5,
-        };
+        // Fetch games data
+        const { data: gamesData, error: gamesError } = await supabase
+          .from("games")
+          .select("*");
 
-        setUserProfile(fallbackProfile);
-        setIsLoading(false);
+        if (gamesError) {
+          console.error("Error fetching games data:", gamesError);
+        } else {
+          setGames(gamesData || []);
+        }
 
-        // Option: You could try to create a user record here
-        // This might need to be discussed with your team - how do you want to handle
-        // the mismatch between auth users and database users?
+        // Fetch user progress for games
+        const { data: userGamesData, error: userGamesError } = await supabase
+          .from("user_game_progress")
+          .select("*")
+          .eq("user_id", profile.id);
+
+        if (userGamesError) {
+          console.error("Error fetching user game progress:", userGamesError);
+        } else if (userGamesData && gamesData) {
+          // Merge game data with user progress
+          const gamesWithProgress = gamesData.map((game) => {
+            const userProgress = userGamesData.find(
+              (p) => p.game_id === game.id
+            );
+            return {
+              ...game,
+              progress: userProgress ? userProgress.progress : 0,
+            };
+          });
+          setGames(gamesWithProgress);
+        }
+
+        // Fetch achievements
+        const { data: achievementsData, error: achievementsError } =
+          await supabase.from("achievements").select("*");
+
+        if (achievementsError) {
+          console.error("Error fetching achievements:", achievementsError);
+        } else {
+          // Fetch user achievements
+          const { data: userAchievements, error: userAchievementsError } =
+            await supabase
+              .from("user_achievements")
+              .select("*")
+              .eq("user_id", profile.id);
+
+          if (userAchievementsError) {
+            console.error(
+              "Error fetching user achievements:",
+              userAchievementsError
+            );
+          } else if (achievementsData) {
+            // Merge achievements with completion status
+            const achievementsWithStatus = achievementsData.map(
+              (achievement) => {
+                const isCompleted = userAchievements?.some(
+                  (ua) => ua.achievement_id === achievement.id && ua.completed
+                );
+                return {
+                  ...achievement,
+                  completed: isCompleted || false,
+                };
+              }
+            );
+            setAchievements(achievementsWithStatus);
+          }
+        }
+
+        // Fetch leaderboard data
+        const { data: leaderboard, error: leaderboardError } = await supabase
+          .from("users")
+          .select("id, name, email, level, current_xp, avatar_url")
+          .order("level", { ascending: false })
+          .order("current_xp", { ascending: false })
+          .limit(10);
+
+        if (leaderboardError) {
+          console.error("Error fetching leaderboard:", leaderboardError);
+        } else {
+          setLeaderboardData(leaderboard || []);
+        }
       } catch (error) {
         console.error("Error:", error);
-        toast.error("Đã có lỗi xảy ra");
+        toast.error("Đã có lỗi xảy ra khi tải dữ liệu");
+      } finally {
         setIsLoading(false);
       }
     };
 
-    getUser();
+    fetchDashboardData();
   }, [supabase, router]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setProgress(currentXp);
+      setProgress(userStats.currentXp);
     }, 500);
     return () => clearTimeout(timer);
-  }, [currentXp]);
+  }, [userStats.currentXp]);
 
   if (isLoading) {
     return (
@@ -227,6 +301,14 @@ export default function DashboardPage() {
     );
   }
 
+  // Filter games by category
+  const vocabularyGames = games.filter(
+    (game) => game.category === GAME_CATEGORIES.VOCABULARY
+  );
+  const grammarGames = games.filter(
+    (game) => game.category === GAME_CATEGORIES.GRAMMAR
+  );
+
   return (
     <div className="min-h-screen bg-game-background">
       <Navigation />
@@ -267,7 +349,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="text-4xl font-bold text-game-primary">
-                      {learningStreak} ngày
+                      {userStats.learningStreak} ngày
                     </div>
                     <motion.div
                       animate={{ rotate: 360 }}
@@ -288,7 +370,7 @@ export default function DashboardPage() {
                 <StatsCard
                   icon={<Clock className="mr-2 h-5 w-5 text-game-secondary" />}
                   title="Mục tiêu hàng ngày"
-                  description={`${currentXp}/${dailyXpGoal} XP hôm nay`}
+                  description={`${userStats.currentXp}/${userStats.dailyXpGoal} XP hôm nay`}
                 >
                   <div className="space-y-2">
                     <div className="h-3 w-full bg-white rounded-full overflow-hidden">
@@ -296,13 +378,16 @@ export default function DashboardPage() {
                         className="h-full bg-game-primary"
                         initial={{ width: 0 }}
                         animate={{
-                          width: `${(currentXp / dailyXpGoal) * 100}%`,
+                          width: `${
+                            (userStats.currentXp / userStats.dailyXpGoal) * 100
+                          }%`,
                         }}
                         transition={{ duration: 1, delay: 0.5 }}
                       />
                     </div>
                     <div className="mt-2 text-sm text-game-accent/70">
-                      Cần thêm {dailyXpGoal - currentXp} XP để đạt mục tiêu
+                      Cần thêm {userStats.dailyXpGoal - userStats.currentXp} XP
+                      để đạt mục tiêu
                     </div>
                   </div>
                 </StatsCard>
@@ -326,7 +411,7 @@ export default function DashboardPage() {
                       }}
                     >
                       <div className="text-3xl font-bold text-game-accent">
-                        {totalWords}
+                        {userStats.totalWords}
                       </div>
                       <div className="text-sm text-game-accent/70">Từ vựng</div>
                     </motion.div>
@@ -340,7 +425,7 @@ export default function DashboardPage() {
                       }}
                     >
                       <div className="text-3xl font-bold text-game-secondary">
-                        {totalGrammarRules}
+                        {userStats.totalGrammarRules}
                       </div>
                       <div className="text-sm text-game-accent/70">
                         Quy tắc ngữ pháp
@@ -384,7 +469,7 @@ export default function DashboardPage() {
                       }}
                     >
                       <div className="text-3xl font-bold text-game-primary">
-                        {userProfile?.available_games || 5}
+                        {userStats.availableGames}
                       </div>
                       <div className="text-sm text-game-accent/70">
                         Trò chơi khả dụng
@@ -405,56 +490,67 @@ export default function DashboardPage() {
 
             <SectionHeader title="Trò chơi từ vựng">
               <div className="grid gap-4 md:grid-cols-2">
-                {GAMES.filter(
-                  (game) => game.category === GAME_CATEGORIES.VOCABULARY
-                ).map((game, index) => (
+                {vocabularyGames.map((game, index) => (
                   <GameCard
                     key={game.id}
                     id={game.id}
                     title={game.title}
                     description={game.description}
-                    icon={game.icon}
-                    iconColor={game.color}
-                    progress={game.progress}
+                    icon={game.icon_name} // Assuming icon_name is stored in the database
+                    iconColor={game.color || "bg-game-primary"}
+                    progress={game.progress || 0}
                     index={index}
                   />
                 ))}
+                {vocabularyGames.length === 0 && (
+                  <p className="text-game-accent/70 md:col-span-2 text-center p-4">
+                    Chưa có trò chơi từ vựng khả dụng
+                  </p>
+                )}
               </div>
             </SectionHeader>
 
             <SectionHeader title="Trò chơi ngữ pháp" delay={0.5}>
               <div className="grid gap-4 md:grid-cols-2">
-                {GAMES.filter(
-                  (game) => game.category === GAME_CATEGORIES.GRAMMAR
-                ).map((game, index) => (
+                {grammarGames.map((game, index) => (
                   <GameCard
                     key={game.id}
                     id={game.id}
                     title={game.title}
                     description={game.description}
-                    icon={game.icon}
-                    iconColor={game.color}
-                    progress={game.progress}
+                    icon={game.icon_name} // Assuming icon_name is stored in the database
+                    iconColor={game.color || "bg-game-primary"}
+                    progress={game.progress || 0}
                     index={index}
                   />
                 ))}
+                {grammarGames.length === 0 && (
+                  <p className="text-game-accent/70 md:col-span-2 text-center p-4">
+                    Chưa có trò chơi ngữ pháp khả dụng
+                  </p>
+                )}
               </div>
             </SectionHeader>
 
             <SectionHeader title="Thành tích gần đây" delay={0.6}>
               <div className="grid gap-4 md:grid-cols-3">
-                {ACHIEVEMENTS.map((achievement, index) => (
+                {achievements.map((achievement, index) => (
                   <AchievementCard
                     key={achievement.id}
                     id={achievement.id}
                     title={achievement.title}
                     description={achievement.description}
-                    icon={achievement.icon}
+                    icon={achievement.icon_name} // Assuming icon_name is stored in the database
                     completed={achievement.completed}
                     category={achievement.category}
                     index={index}
                   />
                 ))}
+                {achievements.length === 0 && (
+                  <p className="text-game-accent/70 md:col-span-3 text-center p-4">
+                    Chưa có thành tích nào
+                  </p>
+                )}
               </div>
             </SectionHeader>
           </motion.div>
@@ -470,7 +566,10 @@ export default function DashboardPage() {
               Bảng xếp hạng
             </h2>
             <div className="sticky top-24">
-              <Leaderboard />
+              <Leaderboard
+                data={leaderboardData}
+                currentUserId={userProfile?.id}
+              />
             </div>
           </motion.div>
         </div>
@@ -485,7 +584,7 @@ export default function DashboardPage() {
           <h2 className="mb-4 text-2xl font-bold text-game-accent">
             Bảng xếp hạng
           </h2>
-          <Leaderboard />
+          <Leaderboard data={leaderboardData} currentUserId={userProfile?.id} />
         </motion.div>
       </main>
     </div>

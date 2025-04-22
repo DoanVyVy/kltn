@@ -3,15 +3,34 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import {
+  ChevronRight,
+  BookOpen,
+  BookText,
+  Brain,
+  Gamepad2,
+  MessageSquare,
+  Pencil,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
+
+// Map of icon names to Lucide components
+const iconMap: Record<string, LucideIcon> = {
+  BookOpen,
+  BookText,
+  Brain,
+  Gamepad2,
+  MessageSquare,
+  Pencil,
+  // Add more icons as needed
+};
 
 interface GameCardProps {
   id: number;
   title: string;
   description: string;
-  icon: LucideIcon;
+  icon: string | LucideIcon; // Can accept both string name or actual component
   iconColor: string;
   progress: number;
   index: number;
@@ -21,11 +40,22 @@ export function GameCard({
   id,
   title,
   description,
-  icon: Icon,
+  icon,
   iconColor,
   progress,
   index,
 }: GameCardProps) {
+  // Determine which icon to use
+  let IconComponent: LucideIcon;
+
+  if (typeof icon === "string") {
+    // If it's a string, look it up in our map
+    IconComponent = iconMap[icon] || BookOpen; // Default to BookOpen if not found
+  } else {
+    // If it's already a component, use it
+    IconComponent = icon;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -43,7 +73,7 @@ export function GameCard({
                 whileHover={{ rotate: 5 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Icon className="h-6 w-6" />
+                <IconComponent className="h-6 w-6" />
               </motion.div>
               <motion.div
                 whileHover={{ x: 5 }}

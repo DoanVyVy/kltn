@@ -3,12 +3,24 @@
 import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
+import { trpc } from "@/trpc/client";
 
 export function useAuth() {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const supabase = createClientComponentClient();
+
+  // Sử dụng tRPC mutation để đăng xuất
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      setUser(null);
+      router.push("/dashboard");
+    },
+    onError: (error) => {
+      console.error("Lỗi khi đăng xuất qua tRPC:", error.message);
+    },
+  });
 
   useEffect(() => {
     const getUser = async () => {
@@ -75,9 +87,8 @@ export function useAuth() {
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
-      setUser(null);
-      router.push("/login");
+      // Sử dụng mutation logout từ tRPC thay vì gọi trực tiếp Supabase
+      logoutMutation.mutate();
     } catch (error: any) {
       console.error("Lỗi khi đăng xuất:", error.message);
     }

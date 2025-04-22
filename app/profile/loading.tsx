@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { User } from "lucide-react"
+import { motion } from "framer-motion";
+import { User } from "lucide-react";
 
 export default function Loading() {
   return (
@@ -24,7 +24,11 @@ export default function Loading() {
           <motion.div
             className="relative w-24 h-24 rounded-full bg-white flex items-center justify-center"
             animate={{ rotate: 360 }}
-            transition={{ duration: 10, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+            transition={{
+              duration: 10,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "linear",
+            }}
           >
             <User className="h-12 w-12 text-game-primary" />
           </motion.div>
@@ -63,6 +67,5 @@ export default function Loading() {
         </motion.div>
       </motion.div>
     </div>
-  )
+  );
 }
-

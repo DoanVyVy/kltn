@@ -2,6 +2,8 @@ import { z } from "zod";
 import { baseProcedure, createTRPCRouter } from "./init";
 import { paginationRequestSchema } from "@/schema/pagination";
 import { createHash } from "crypto";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
 // Hàm mã hóa mật khẩu thay thế bcrypt
 function hashPassword(password: string): string {
@@ -177,7 +179,11 @@ export const userRouter = createTRPCRouter({
 
       // Get unique vocabulary words
       const uniqueWordIds = [
-        ...new Set(vocabAnswers.map((a: { wordId: number | null }) => a.wordId).filter((id): id is number => id !== null)),
+        ...new Set(
+          vocabAnswers
+            .map((a: { wordId: number | null }) => a.wordId)
+            .filter((id): id is number => id !== null)
+        ),
       ];
       const vocabularyCount = uniqueWordIds.length;
 
@@ -395,10 +401,15 @@ export const userRouter = createTRPCRouter({
     .query(async ({ ctx: { db }, input }) => {
       const { userId } = input;
 
-      if (!userId) return null;
+      if (!userId) {
+        console.log("getUserProfile: No userId provided");
+        return null;
+      }
 
-      // Get user basic info
-      const user = await db.user.findUnique({
+      console.log("getUserProfile: Looking up user with ID:", userId);
+
+      // First try direct lookup
+      let user = await db.user.findUnique({
         where: { userId },
         select: {
           userId: true,
@@ -415,7 +426,56 @@ export const userRouter = createTRPCRouter({
         },
       });
 
-      if (!user) return null;
+      // If no user found, try looking in user_metadata for mapping
+      if (!user) {
+        console.log(
+          "getUserProfile: No user found with direct ID lookup. Looking up by metadata..."
+        );
+        try {
+          // Try to find a user with matching metadata.userId
+          const { data, error } = await createRouteHandlerClient({ cookies })
+            .from("users")
+            .select("user_id, email, metadata")
+            .eq("auth_id", userId)
+            .maybeSingle();
+
+          if (data && data.user_id) {
+            console.log(
+              "Found matching user in Supabase with database ID:",
+              data.user_id
+            );
+
+            // Now look up this user in the database
+            user = await db.user.findFirst({
+              where: { userId: data.user_id },
+              select: {
+                userId: true,
+                username: true,
+                email: true,
+                fullName: true,
+                avatarUrl: true,
+                currentLevel: true,
+                totalPoints: true,
+                streakDays: true,
+                lastActiveDate: true,
+                createdAt: true,
+                role: true,
+              },
+            });
+          } else {
+            console.log("No matching user found in metadata lookup.");
+          }
+        } catch (error) {
+          console.error("Error during metadata lookup:", error);
+        }
+      }
+
+      if (!user) {
+        console.log("getUserProfile: User not found after all attempts");
+        return null;
+      }
+
+      console.log("getUserProfile: Found user:", user.email);
 
       let uniqueWordIds: number[] = [];
       let uniqueGrammarIds: number[] = [];
@@ -426,6 +486,280 @@ export const userRouter = createTRPCRouter({
       };
 
       try {
+        const learningAnswers: LearningAnswer[] =
+          await db.userLearningAnswer.findMany({
+            where: {
+              userId,
+              isCorrect: true,
+            },
+            select: {
+              wordId: true,
+              grammarId: true,
+            },
+          });
+
+        // Safely extract the word IDs
+        const wordIds = learningAnswers
+          .filter((answer: LearningAnswer) => answer.wordId !== null)
+          .map((answer: LearningAnswer) => answer.wordId)
+          .filter((id: any) => typeof id === "number");
+
+        uniqueWordIds = [...new Set(wordIds)] as number[];
+
+        // Safely extract the grammar IDs
+        const grammarIds = learningAnswers
+          .filter((answer: LearningAnswer) => answer.grammarId !== null)
+          .map((answer: LearningAnswer) => answer.grammarId)
+          .filter((id: any) => typeof id === "number");
+
+        uniqueGrammarIds = [...new Set(grammarIds)] as number[];
+      } catch (error) {
+        console.error("Error fetching learning answers:", error);
+        // Continue with empty arrays if table doesn't exist yet
+      }
+
+      // Get user achievements
+      const userAchievements = await db.userAchievement.findMany({
+        where: { userId },
+        include: {
+          achievement: true,
+        },
+        orderBy: {
+          dateAchieved: "desc",
+        },
+      });
+
+      type WordCategory = {
+        categoryId: number;
+        categoryName: string;
+        vocabularyWords?: { wordId: number }[];
+      };
+
+      type GrammarCategory = {
+        categoryId: number;
+        categoryName: string;
+        grammarContents?: { contentId: number }[];
+      };
+
+      // Get word categories learned - handle empty arrays
+      let wordCategories: WordCategory[] = [];
+      if (uniqueWordIds.length > 0) {
+        try {
+          wordCategories = await db.category.findMany({
+            where: {
+              isVocabularyCourse: true,
+              vocabularyWords: {
+                some: {
+                  wordId: {
+                    in: uniqueWordIds,
+                  },
+                },
+              },
+            },
+            select: {
+              categoryId: true,
+              categoryName: true,
+              vocabularyWords: {
+                where: {
+                  wordId: {
+                    in: uniqueWordIds,
+                  },
+                },
+                select: {
+                  wordId: true,
+                },
+              },
+            },
+          });
+        } catch (error) {
+          console.error("Error fetching word categories:", error);
+        }
+      }
+
+      // Get grammar categories learned - handle empty arrays
+      let grammarCategories: GrammarCategory[] = [];
+      if (uniqueGrammarIds.length > 0) {
+        try {
+          grammarCategories = await db.category.findMany({
+            where: {
+              isVocabularyCourse: false,
+              grammarContents: {
+                some: {
+                  contentId: {
+                    in: uniqueGrammarIds,
+                  },
+                },
+              },
+            },
+            select: {
+              categoryId: true,
+              categoryName: true,
+              grammarContents: {
+                where: {
+                  contentId: {
+                    in: uniqueGrammarIds,
+                  },
+                },
+                select: {
+                  contentId: true,
+                },
+              },
+            },
+          });
+        } catch (error) {
+          console.error("Error fetching grammar categories:", error);
+        }
+      }
+
+      // Get games completed count
+      const userProgress = await db.userProgress.findMany({
+        where: { userId },
+      });
+      const gamesCompleted = userProgress.reduce(
+        (total, progress) => total + progress.timesPracticed,
+        0
+      );
+
+      // Format achievements
+      const achievements = userAchievements.map((ua) => ({
+        id: ua.achievementId,
+        title: ua.achievement.title,
+        description: ua.achievement.description,
+        icon: ua.achievement.iconUrl || "",
+        category: ua.achievement.title.toLowerCase().includes("vocabulary")
+          ? "vocabulary"
+          : "grammar",
+        dateAchieved: ua.dateAchieved,
+        completed: true,
+      }));
+
+      // Format word categories - safely handle undefined properties
+      const wordCategoriesFormatted = wordCategories.map(
+        (cat: WordCategory) => ({
+          categoryId: cat.categoryId,
+          name: cat.categoryName,
+          count: cat.vocabularyWords ? cat.vocabularyWords.length : 0,
+        })
+      );
+
+      // Format grammar categories - safely handle undefined properties
+      const grammarCategoriesFormatted = grammarCategories.map(
+        (cat: GrammarCategory) => ({
+          categoryId: cat.categoryId,
+          name: cat.categoryName,
+          count: cat.grammarContents ? cat.grammarContents.length : 0,
+        })
+      );
+
+      return {
+        ...user,
+        wordsLearned: uniqueWordIds.length,
+        grammarRulesLearned: uniqueGrammarIds.length,
+        gamesCompleted,
+        achievements,
+        wordCategories: wordCategoriesFormatted,
+        grammarCategories: grammarCategoriesFormatted,
+      };
+    }),
+
+  getUserProfileByEmail: baseProcedure
+    .input(z.object({ email: z.string().email() }))
+    .query(async ({ ctx: { db }, input }) => {
+      const { email } = input;
+
+      if (!email) {
+        console.log("getUserProfileByEmail: No email provided");
+        return null;
+      }
+
+      console.log("getUserProfileByEmail: Looking up user with email:", email);
+
+      // Get user basic info by email
+      let user = await db.user.findFirst({
+        where: { email },
+        select: {
+          userId: true,
+          username: true,
+          email: true,
+          fullName: true,
+          avatarUrl: true,
+          currentLevel: true,
+          totalPoints: true,
+          streakDays: true,
+          lastActiveDate: true,
+          createdAt: true,
+          role: true,
+        },
+      });
+
+      // If no user found, create a new user profile
+      if (!user) {
+        console.log(
+          "getUserProfileByEmail: No user found with email - creating new profile"
+        );
+
+        try {
+          // Get Supabase user data if available
+          const supabase = createRouteHandlerClient({ cookies });
+          const { data: authUser } = await supabase.auth.getUser();
+
+          // Create a new user profile
+          const newUser = await db.user.create({
+            data: {
+              userId: authUser?.user?.id || `email-${Date.now()}`, // Use auth ID if available
+              username: email.split("@")[0],
+              email: email,
+              passwordHash: "", // Empty since managed by Supabase
+              fullName:
+                authUser?.user?.user_metadata?.name || email.split("@")[0],
+              currentLevel: 1,
+              totalPoints: 0,
+              streakDays: 0,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              lastActiveDate: new Date(),
+            },
+          });
+
+          console.log(
+            "getUserProfileByEmail: Created new user:",
+            newUser.userId
+          );
+
+          // Use the newly created user
+          user = {
+            userId: newUser.userId,
+            username: newUser.username,
+            email: newUser.email,
+            fullName: newUser.fullName,
+            avatarUrl: null,
+            currentLevel: 1,
+            totalPoints: 0,
+            streakDays: 0,
+            lastActiveDate: new Date(),
+            createdAt: new Date(),
+            role: "user",
+          };
+        } catch (error) {
+          console.error("Error creating new user:", error);
+          return null;
+        }
+      }
+
+      console.log("getUserProfileByEmail: Using user profile:", user.userId);
+
+      // Get userId for the next queries
+      const userId = user.userId;
+      let uniqueWordIds: number[] = [];
+      let uniqueGrammarIds: number[] = [];
+
+      type LearningAnswer = {
+        wordId: number | null;
+        grammarId: number | null;
+      };
+
+      try {
+        // Find all correct learning answers from the user
         const learningAnswers: LearningAnswer[] =
           await db.userLearningAnswer.findMany({
             where: {

@@ -2,18 +2,38 @@
 
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Trophy } from "lucide-react";
+import {
+  Trophy,
+  BookOpen,
+  BookText,
+  Brain,
+  Gamepad2,
+  MessageSquare,
+  Pencil,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
+
+// Map of icon names to Lucide components
+const iconMap: Record<string, LucideIcon> = {
+  BookOpen,
+  BookText,
+  Brain,
+  Gamepad2,
+  MessageSquare,
+  Pencil,
+  Trophy,
+  // Add more icons as needed
+};
 
 interface AchievementCardProps {
   id: number;
   title: string;
   description: string;
-  icon: LucideIcon;
+  icon: string | LucideIcon;
   completed: boolean;
-  category: "vocabulary" | "grammar";
+  category: string;
   index: number;
 }
 
@@ -21,11 +41,36 @@ export function AchievementCard({
   id,
   title,
   description,
-  icon: Icon,
+  icon,
   completed,
   category,
   index,
 }: AchievementCardProps) {
+  // Determine which icon to use
+  let IconComponent: LucideIcon;
+
+  if (typeof icon === "string") {
+    // If it's a string, look it up in our map
+    IconComponent = iconMap[icon] || Trophy; // Default to Trophy if not found
+  } else {
+    // If it's already a component, use it
+    IconComponent = icon;
+  }
+
+  // Check if category is a string that matches "vocabulary" or "grammar"
+  const categoryText =
+    typeof category === "string"
+      ? category.toLowerCase() === "vocabulary"
+        ? "Từ vựng"
+        : category.toLowerCase() === "grammar"
+        ? "Ngữ pháp"
+        : category
+      : "Khác";
+
+  // Determine category styling
+  const isCategoryVocabulary =
+    typeof category === "string" && category.toLowerCase() === "vocabulary";
+
   return (
     <motion.div
       key={id}
@@ -67,7 +112,7 @@ export function AchievementCard({
               }
               transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
             >
-              <Icon className="h-6 w-6" />
+              <IconComponent className="h-6 w-6" />
             </motion.div>
             {completed && (
               <motion.div
@@ -89,12 +134,12 @@ export function AchievementCard({
             <Badge
               variant="outline"
               className={`${
-                category === "vocabulary"
+                isCategoryVocabulary
                   ? "bg-game-primary/10 text-game-primary"
                   : "bg-game-secondary/10 text-game-secondary"
               }`}
             >
-              {category === "vocabulary" ? "Từ vựng" : "Ngữ pháp"}
+              {categoryText}
             </Badge>
           </motion.div>
         </CardContent>

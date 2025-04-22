@@ -130,6 +130,7 @@ export default function ProfilePage() {
 
   // If there's no user or the profile data is loading, show loading screen
   if (isLoading || !profile) {
+    console.log(isLoading, profile);
     return (
       <div className="min-h-screen bg-game-background flex items-center justify-center">
         <motion.div
@@ -249,26 +250,31 @@ export default function ProfilePage() {
   }
 
   // Get next level points needed
-  const pointsToNextLevel = 1000 - (profile.totalPoints % 1000);
-  const currentLevelProgress = (profile.totalPoints % 1000) / 10; // Convert to percentage
+  const totalPoints = profile.totalPoints || 0;
+  const pointsToNextLevel = 1000 - (totalPoints % 1000);
+  const currentLevelProgress = (totalPoints % 1000) / 10; // Convert to percentage
 
   // Filter vocab and grammar achievements
-  const vocabAchievements = profile.achievements.filter(
+  const achievements = profile.achievements || [];
+  const vocabAchievements = achievements.filter(
     (a) => a.category === "vocabulary"
   );
-  const grammarAchievements = profile.achievements.filter(
+  const grammarAchievements = achievements.filter(
     (a) => a.category === "grammar"
   );
 
   // Get vocabulary skills progress
+  const wordsLearned = profile.wordsLearned || 0;
   const vocabularyProgress = Math.min(
     100,
-    Math.round((profile.wordsLearned / 1000) * 100)
+    Math.round((wordsLearned / 1000) * 100)
   );
+
   // Get grammar skills progress
+  const grammarRulesLearned = profile.grammarRulesLearned || 0;
   const grammarProgress = Math.min(
     100,
-    Math.round((profile.grammarRulesLearned / 100) * 100)
+    Math.round((grammarRulesLearned / 100) * 100)
   );
 
   return (
@@ -336,19 +342,19 @@ export default function ProfilePage() {
                 variant="outline"
                 className="bg-game-primary/10 text-game-primary"
               >
-                {profile.streakDays} ngày hoạt động
+                {profile.streakDays || 0} ngày hoạt động
               </Badge>
               <Badge
                 variant="outline"
                 className="bg-game-secondary/10 text-game-secondary"
               >
-                {profile.totalPoints} XP
+                {totalPoints} XP
               </Badge>
               <Badge
                 variant="outline"
                 className="bg-game-accent/10 text-game-accent"
               >
-                Cấp độ {profile.currentLevel}
+                Cấp độ {profile.currentLevel || 1}
               </Badge>
             </div>
           </div>
@@ -394,7 +400,7 @@ export default function ProfilePage() {
                     <BookText className="h-6 w-6 text-game-primary" />
                   </div>
                   <div className="text-3xl font-bold text-game-accent">
-                    {profile.wordsLearned}
+                    {wordsLearned}
                   </div>
                   <p className="text-sm text-game-accent/70">Từ vựng đã học</p>
                 </CardContent>
@@ -407,7 +413,7 @@ export default function ProfilePage() {
                     <Brain className="h-6 w-6 text-game-secondary" />
                   </div>
                   <div className="text-3xl font-bold text-game-accent">
-                    {profile.grammarRulesLearned}
+                    {grammarRulesLearned}
                   </div>
                   <p className="text-sm text-game-accent/70">
                     Quy tắc ngữ pháp đã học
@@ -422,7 +428,7 @@ export default function ProfilePage() {
                     <Gamepad2 className="h-6 w-6 text-game-accent" />
                   </div>
                   <div className="text-3xl font-bold text-game-accent">
-                    {profile.gamesCompleted}
+                    {profile.gamesCompleted || 0}
                   </div>
                   <p className="text-sm text-game-accent/70">
                     Trò chơi đã hoàn thành
@@ -437,7 +443,7 @@ export default function ProfilePage() {
                     <Calendar className="h-6 w-6 text-game-primary" />
                   </div>
                   <div className="text-3xl font-bold text-game-accent">
-                    {profile.streakDays}
+                    {profile.streakDays || 0}
                   </div>
                   <p className="text-sm text-game-accent/70">Ngày hoạt động</p>
                 </CardContent>
@@ -455,8 +461,8 @@ export default function ProfilePage() {
                     Tiến độ cấp độ
                   </CardTitle>
                   <CardDescription className="text-game-accent/70">
-                    {profile.totalPoints} XP tổng cộng • Cần thêm{" "}
-                    {pointsToNextLevel} XP để lên cấp
+                    {totalPoints} XP tổng cộng • Cần thêm {pointsToNextLevel} XP
+                    để lên cấp
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -498,8 +504,8 @@ export default function ProfilePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {profile.achievements.length > 0 ? (
-                    profile.achievements
+                  {achievements.length > 0 ? (
+                    achievements
                       .filter((a) => a.completed)
                       .slice(0, 3)
                       .map((achievement) => {
@@ -620,17 +626,16 @@ export default function ProfilePage() {
                     Thành tích của bạn
                   </CardTitle>
                   <CardDescription className="text-game-accent/70">
-                    {profile.achievements.filter((a) => a.completed).length}{" "}
-                    thành tích đã mở khóa
+                    {achievements.filter((a) => a.completed).length} thành tích
+                    đã mở khóa
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Progress
                     value={
-                      profile.achievements.length
-                        ? (profile.achievements.filter((a) => a.completed)
-                            .length /
-                            profile.achievements.length) *
+                      achievements.length
+                        ? (achievements.filter((a) => a.completed).length /
+                            achievements.length) *
                           100
                         : 0
                     }
@@ -664,8 +669,8 @@ export default function ProfilePage() {
             </motion.div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {profile.achievements.length > 0 ? (
-                profile.achievements.map((achievement, index) => {
+              {achievements.length > 0 ? (
+                achievements.map((achievement, index) => {
                   const IconComponent = getIconComponent(achievement.category);
                   return (
                     <motion.div
@@ -791,7 +796,7 @@ export default function ProfilePage() {
                       variant="outline"
                       className="bg-game-primary/10 text-game-primary border-game-primary/20"
                     >
-                      {profile.wordsLearned} từ
+                      {wordsLearned} từ
                     </Badge>
                   </div>
 
@@ -855,7 +860,7 @@ export default function ProfilePage() {
                       )}
                       <div className="rounded-md border border-game-primary/20 bg-game-primary/5 p-3 text-center">
                         <div className="text-xl font-bold text-game-primary">
-                          {profile.wordsLearned -
+                          {wordsLearned -
                             (profile.wordCategories || []).reduce(
                               (sum, cat) => sum + cat.count,
                               0
@@ -866,7 +871,7 @@ export default function ProfilePage() {
                       <div className="rounded-md border border-game-primary/20 bg-game-primary/5 p-3 text-center">
                         <div className="text-xl font-bold text-game-primary">
                           +
-                          {profile.wordsLearned -
+                          {wordsLearned -
                             (profile.wordCategories || []).reduce(
                               (sum, cat) => sum + cat.count,
                               0
@@ -904,7 +909,7 @@ export default function ProfilePage() {
                       variant="outline"
                       className="bg-game-secondary/10 text-game-secondary border-game-secondary/20"
                     >
-                      {profile.grammarRulesLearned} quy tắc
+                      {grammarRulesLearned} quy tắc
                     </Badge>
                   </div>
 
@@ -970,7 +975,7 @@ export default function ProfilePage() {
                       )}
                       <div className="rounded-md border border-game-secondary/20 bg-game-secondary/5 p-3 text-center">
                         <div className="text-xl font-bold text-game-secondary">
-                          {profile.grammarRulesLearned -
+                          {grammarRulesLearned -
                             (profile.grammarCategories || []).reduce(
                               (sum, cat) => sum + cat.count,
                               0
@@ -981,7 +986,7 @@ export default function ProfilePage() {
                       <div className="rounded-md border border-game-secondary/20 bg-game-secondary/5 p-3 text-center">
                         <div className="text-xl font-bold text-game-secondary">
                           +
-                          {profile.grammarRulesLearned -
+                          {grammarRulesLearned -
                             (profile.grammarCategories || []).reduce(
                               (sum, cat) => sum + cat.count,
                               0
@@ -1023,8 +1028,7 @@ export default function ProfilePage() {
                           Mục tiêu từ vựng
                         </p>
                         <p className="text-sm text-game-accent/70">
-                          Học{" "}
-                          {Math.floor(profile.wordsLearned / 100) * 100 + 50} từ
+                          Học {Math.floor(wordsLearned / 100) * 100 + 50} từ
                           vựng tiếng Anh
                         </p>
                       </div>
