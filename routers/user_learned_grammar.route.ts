@@ -6,9 +6,9 @@ import prisma from "@/lib/prismaClient";
 
 // Define types for the models that aren't recognized yet
 type UserLearningAnswerGroupByOutputItem = {
-  wordId: number | null;
-  grammarId: number | null;
-  _count?: {
+  wordId?: number | null;
+  grammarId?: number | null;
+  _count: {
     wordId?: number;
     grammarId?: number;
   };
@@ -31,8 +31,16 @@ type UserProgressWithCategory = {
   };
 };
 
-const userLearnedWordsRouter = createTRPCRouter({
-  getLearnedWords: baseProcedure
+type UserReviewGrammarItem = {
+  id: number;
+  userId: string;
+  grammarId: number;
+  addedAt: Date;
+  grammar: any; // GrammarContent type
+};
+
+const userLearnedGrammarRouter = createTRPCRouter({
+  getLearnedGrammar: baseProcedure
     .input(
       paginationRequestSchema.extend({
         categoryId: z.number().optional(),
@@ -43,15 +51,15 @@ const userLearnedWordsRouter = createTRPCRouter({
         const user = await getCurrentUser();
         if (!user || !user.user || !user.user.id) {
           return {
-            words: [],
+            grammars: [],
             total: 0,
           };
         }
 
-        // Tìm các processId của user (để lọc theo khóa học nếu cần)
+        // Find user's grammar progress
         const processesQuery = {
           userId: user.user.id,
-          contentType: "vocabulary",
+          contentType: "grammar",
           ...(input.categoryId ? { categoryId: input.categoryId } : {}),
         };
 
@@ -67,37 +75,39 @@ const userLearnedWordsRouter = createTRPCRouter({
 
         if (processIds.length === 0) {
           return {
-            words: [],
+            grammars: [],
             total: 0,
           };
         }
 
-        // Find learned wordIds with correct answers
-        const learnedWordIds = await prisma.userLearningAnswer.groupBy({
-          by: ["wordId"],
+        // Find grammarIds with correct answers
+        const learnedGrammarIds = await prisma.userLearningAnswer.groupBy({
+          by: ["grammarId"],
           where: {
             userId: user.user.id,
             isCorrect: true,
             processId: { in: processIds },
-            wordId: { not: null },
+            grammarId: { not: null },
           },
           _count: {
-            wordId: true,
+            grammarId: true,
           },
         });
 
-        if (learnedWordIds.length === 0) {
+        if (learnedGrammarIds.length === 0) {
           return {
-            words: [],
+            grammars: [],
             total: 0,
           };
         }
 
-        // Lấy danh sách các từ đã thuộc với phân trang
-        const words = await prisma.vocabularyWord.findMany({
+        // Get paginated list of learned grammar
+        const grammars = await prisma.grammarContent.findMany({
           where: {
-            wordId: {
-              in: learnedWordIds.map((w) => w.wordId!),
+            contentId: {
+              in: learnedGrammarIds.map(
+                (g: UserLearningAnswerGroupByOutputItem) => g.grammarId!
+              ),
             },
           },
           skip: (input.page - 1) * input.limit,
@@ -110,17 +120,17 @@ const userLearnedWordsRouter = createTRPCRouter({
             },
           },
           orderBy: {
-            wordId: "desc",
+            contentId: "desc",
           },
         });
 
-        // Get correct and incorrect counts for each word
-        const wordStats = await Promise.all(
-          words.map(async (word) => {
+        // Get statistics for each grammar point
+        const grammarStats = await Promise.all(
+          grammars.map(async (grammar) => {
             const correctCount = await prisma.userLearningAnswer.count({
               where: {
                 userId: user.user.id,
-                wordId: word.wordId,
+                grammarId: grammar.contentId,
                 isCorrect: true,
               },
             });
@@ -128,7 +138,7 @@ const userLearnedWordsRouter = createTRPCRouter({
             const incorrectCount = await prisma.userLearningAnswer.count({
               where: {
                 userId: user.user.id,
-                wordId: word.wordId,
+                grammarId: grammar.contentId,
                 isCorrect: false,
               },
             });
@@ -136,7 +146,7 @@ const userLearnedWordsRouter = createTRPCRouter({
             const lastAnswered = await prisma.userLearningAnswer.findFirst({
               where: {
                 userId: user.user.id,
-                wordId: word.wordId,
+                grammarId: grammar.contentId,
               },
               orderBy: {
                 createdAt: "desc",
@@ -147,7 +157,7 @@ const userLearnedWordsRouter = createTRPCRouter({
             });
 
             return {
-              ...word,
+              ...grammar,
               stats: {
                 correctCount,
                 incorrectCount,
@@ -158,34 +168,34 @@ const userLearnedWordsRouter = createTRPCRouter({
         );
 
         return {
-          words: wordStats,
-          total: learnedWordIds.length,
+          grammars: grammarStats,
+          total: learnedGrammarIds.length,
         };
       } catch (error) {
-        console.error("Error getting learned words:", error);
+        console.error("Error getting learned grammar:", error);
         return {
-          words: [],
+          grammars: [],
           total: 0,
         };
       }
     }),
 
-  getLearnedWordsStats: baseProcedure.query(async ({ ctx }) => {
+  getLearnedGrammarStats: baseProcedure.query(async ({ ctx }) => {
     try {
       const user = await getCurrentUser();
       if (!user || !user.user || !user.user.id) {
         return {
-          totalLearnedWords: 0,
+          totalLearnedGrammars: 0,
           totalCategories: 0,
           categoriesStats: [],
         };
       }
 
-      // Tìm tất cả các tiến trình của người dùng
+      // Find all user grammar progress
       const processes = (await prisma.userProgress.findMany({
         where: {
           userId: user.user.id,
-          contentType: "vocabulary",
+          contentType: "grammar",
         },
         include: {
           category: true,
@@ -194,7 +204,7 @@ const userLearnedWordsRouter = createTRPCRouter({
 
       if (processes.length === 0) {
         return {
-          totalLearnedWords: 0,
+          totalLearnedGrammars: 0,
           totalCategories: 0,
           categoriesStats: [],
         };
@@ -202,58 +212,58 @@ const userLearnedWordsRouter = createTRPCRouter({
 
       const processIds = processes.map((p) => p.progressId);
 
-      // Count total learned words (unique wordIds with isCorrect = true)
-      const learnedWordIds = await prisma.userLearningAnswer.groupBy({
-        by: ["wordId"],
+      // Count unique learned grammar points
+      const learnedGrammarIds = await prisma.userLearningAnswer.groupBy({
+        by: ["grammarId"],
         where: {
           userId: user.user.id,
           isCorrect: true,
           processId: { in: processIds },
-          wordId: { not: null },
+          grammarId: { not: null },
         },
         _count: {
-          wordId: true,
+          grammarId: true,
         },
       });
 
-      // Thống kê theo từng danh mục
+      // Get statistics by category
       const categoriesStats = await Promise.all(
         processes.map(async (process) => {
           if (!process.category) return null;
 
-          // Count learned words in this category
+          // Count learned grammar in this category
           const learnedInCategory = await prisma.userLearningAnswer.groupBy({
-            by: ["wordId"],
+            by: ["grammarId"],
             where: {
               userId: user.user.id,
               isCorrect: true,
               processId: process.progressId,
-              wordId: { not: null },
+              grammarId: { not: null },
             },
             _count: {
-              wordId: true,
+              grammarId: true,
             },
           });
 
           return {
             categoryId: process.category.categoryId,
             categoryName: process.category.categoryName,
-            totalWords: process.category.totalWords,
-            learnedWords: learnedInCategory.length,
+            totalGrammars: process.category.totalGrammar,
+            learnedGrammars: learnedInCategory.length,
             progress: process.processPercentage,
           };
         })
       );
 
       return {
-        totalLearnedWords: learnedWordIds.length,
+        totalLearnedGrammars: learnedGrammarIds.length,
         totalCategories: processes.filter((p) => p.category).length,
         categoriesStats: categoriesStats.filter((c) => c !== null),
       };
     } catch (error) {
-      console.error("Error getting learned words stats:", error);
+      console.error("Error getting learned grammar stats:", error);
       return {
-        totalLearnedWords: 0,
+        totalLearnedGrammars: 0,
         totalCategories: 0,
         categoriesStats: [],
       };
@@ -263,7 +273,7 @@ const userLearnedWordsRouter = createTRPCRouter({
   addToReview: baseProcedure
     .input(
       z.object({
-        wordId: z.number(),
+        grammarId: z.number(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -273,17 +283,17 @@ const userLearnedWordsRouter = createTRPCRouter({
           throw new Error("Unauthorized");
         }
 
-        // Kiểm tra xem từ đã có trong danh sách ôn tập chưa
-        const existingEntry = await prisma.userReviewWord.findFirst({
+        // Check if grammar is already in review list
+        const existingEntry = await prisma.userReviewGrammar.findFirst({
           where: {
             userId: user.user.id,
-            wordId: input.wordId,
+            grammarId: input.grammarId,
           },
         });
 
         if (existingEntry) {
-          // Nếu đã có, cập nhật thời gian thêm
-          return await prisma.userReviewWord.update({
+          // If exists, update the added time
+          return await prisma.userReviewGrammar.update({
             where: {
               id: existingEntry.id,
             },
@@ -292,25 +302,25 @@ const userLearnedWordsRouter = createTRPCRouter({
             },
           });
         } else {
-          // Nếu chưa có, thêm mới
-          return await prisma.userReviewWord.create({
+          // If not, create new entry
+          return await prisma.userReviewGrammar.create({
             data: {
               userId: user.user.id,
-              wordId: input.wordId,
+              grammarId: input.grammarId,
               addedAt: new Date(),
             },
           });
         }
       } catch (error) {
-        console.error("Error adding word to review:", error);
-        throw new Error("Failed to add word to review list");
+        console.error("Error adding grammar to review:", error);
+        throw new Error("Failed to add grammar to review list");
       }
     }),
 
   removeFromReview: baseProcedure
     .input(
       z.object({
-        wordId: z.number(),
+        grammarId: z.number(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -320,20 +330,20 @@ const userLearnedWordsRouter = createTRPCRouter({
           throw new Error("Unauthorized");
         }
 
-        // Xóa từ khỏi danh sách ôn tập
-        return await prisma.userReviewWord.deleteMany({
+        // Remove grammar from review list
+        return await prisma.userReviewGrammar.deleteMany({
           where: {
             userId: user.user.id,
-            wordId: input.wordId,
+            grammarId: input.grammarId,
           },
         });
       } catch (error) {
-        console.error("Error removing word from review:", error);
-        throw new Error("Failed to remove word from review list");
+        console.error("Error removing grammar from review:", error);
+        throw new Error("Failed to remove grammar from review list");
       }
     }),
 
-  getReviewWords: baseProcedure
+  getReviewGrammars: baseProcedure
     .input(
       paginationRequestSchema.extend({
         categoryId: z.number().optional(),
@@ -344,35 +354,35 @@ const userLearnedWordsRouter = createTRPCRouter({
         const user = await getCurrentUser();
         if (!user || !user.user || !user.user.id) {
           return {
-            words: [],
+            grammars: [],
             total: 0,
           };
         }
 
-        // Tìm các từ trong danh sách ôn tập
+        // Find grammar points in review list
         const reviewQuery = {
           userId: user.user.id,
           ...(input.categoryId
             ? {
-                word: {
+                grammar: {
                   categoryId: input.categoryId,
                 },
               }
             : {}),
         };
 
-        // Đếm tổng số từ trong danh sách ôn tập
-        const total = await prisma.userReviewWord.count({
+        // Count total grammar points in review list
+        const total = await prisma.userReviewGrammar.count({
           where: reviewQuery,
         });
 
-        // Lấy danh sách các từ với phân trang
-        const reviewWords = await prisma.userReviewWord.findMany({
+        // Get paginated list of grammar points
+        const reviewGrammars = await prisma.userReviewGrammar.findMany({
           where: reviewQuery,
           skip: (input.page - 1) * input.limit,
           take: input.limit,
           include: {
-            word: {
+            grammar: {
               include: {
                 category: true,
               },
@@ -384,20 +394,20 @@ const userLearnedWordsRouter = createTRPCRouter({
         });
 
         return {
-          words: reviewWords.map((rw) => ({
-            ...rw.word,
-            addedToReviewAt: rw.addedAt,
+          grammars: reviewGrammars.map((rg: any) => ({
+            ...rg.grammar,
+            addedToReviewAt: rg.addedAt,
           })),
           total,
         };
       } catch (error) {
-        console.error("Error getting review words:", error);
+        console.error("Error getting review grammars:", error);
         return {
-          words: [],
+          grammars: [],
           total: 0,
         };
       }
     }),
 });
 
-export default userLearnedWordsRouter;
+export default userLearnedGrammarRouter;

@@ -15,10 +15,33 @@ export function useAuth() {
       try {
         const {
           data: { user },
+          error,
         } = await supabase.auth.getUser();
+
+        if (error) {
+          console.error("Lỗi khi lấy thông tin người dùng:", error.message);
+          setUser(null);
+          return;
+        }
+
+        if (user) {
+          console.log("Thông tin user từ Supabase:", {
+            id: user.id,
+            email: user.email,
+            aud: user.aud,
+            role: user.role,
+          });
+
+          // Đảm bảo user có id
+          if (!user.id) {
+            console.error("User không có ID hợp lệ:", user);
+          }
+        }
+
         setUser(user);
-      } catch (error) {
-        console.error("Error getting user:", error);
+      } catch (error: any) {
+        console.error("Lỗi trong getUser:", error.message);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -29,7 +52,19 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      const updatedUser = session?.user ?? null;
+
+      // Log để debug
+      if (updatedUser) {
+        console.log("Auth state changed - User:", {
+          id: updatedUser.id,
+          email: updatedUser.email,
+        });
+      } else {
+        console.log("Auth state changed - No user");
+      }
+
+      setUser(updatedUser);
       setIsLoading(false);
     });
 
@@ -38,10 +73,21 @@ export function useAuth() {
     };
   }, [supabase.auth]);
 
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      router.push("/login");
+    } catch (error: any) {
+      console.error("Lỗi khi đăng xuất:", error.message);
+    }
+  };
+
   return {
     user,
     isLoading,
     isAuthenticated: !!user,
     isAdmin: user?.role === "ADMIN",
+    logout,
   };
 }

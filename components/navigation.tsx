@@ -20,38 +20,25 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
+  const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogout = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Có lỗi xảy ra khi đăng xuất");
-      }
-
+      await logout();
       toast({
         title: "Đăng xuất thành công",
         description: "Hẹn gặp lại bạn!",
         duration: 3000,
       });
-
-      setTimeout(() => {
-        router.push("/login");
-        router.refresh();
-      }, 1000);
     } catch (error) {
       console.error("Logout error:", error);
       toast({
@@ -63,6 +50,14 @@ export default function Navigation() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Lấy chữ cái đầu để hiển thị avatar
+  const getInitials = () => {
+    if (!user) return "A";
+    if (user.name) return user.name.charAt(0).toUpperCase();
+    if (user.email) return user.email.charAt(0).toUpperCase();
+    return "U";
   };
 
   // Cập nhật các mục điều hướng để thêm trang Daily Games
@@ -159,7 +154,7 @@ export default function Navigation() {
           >
             <Avatar className="h-8 w-8 border-2 border-white">
               <AvatarFallback className="bg-white text-game-primary">
-                A
+                {getInitials()}
               </AvatarFallback>
             </Avatar>
           </motion.div>
@@ -245,13 +240,10 @@ export default function Navigation() {
               className="border-t border-white/10 my-2 pt-2"
             >
               <Button
-                className="flex w-full items-center gap-2 px-4 py-3 text-white/80 hover:bg-white/10 hover:text-white rounded-xl"
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  handleLogout();
-                }}
-                disabled={isLoading}
                 variant="ghost"
+                className="flex w-full items-center gap-2 px-4 py-3 text-white/80 hover:bg-white/10 hover:text-white rounded-xl"
+                onClick={handleLogout}
+                disabled={isLoading}
               >
                 {isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -260,6 +252,25 @@ export default function Navigation() {
                 )}
                 <span>Đăng xuất</span>
               </Button>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="flex items-center gap-2 px-4 py-2 mt-2"
+            >
+              <Avatar className="h-8 w-8 border-2 border-white">
+                <AvatarFallback className="bg-white text-game-primary">
+                  {getInitials()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="text-white">
+                <p className="text-sm font-medium truncate">{user?.email}</p>
+                <p className="text-xs text-white/70">
+                  {user?.name || "Học viên"}
+                </p>
+              </div>
             </motion.div>
           </nav>
         </motion.div>

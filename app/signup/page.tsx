@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import LottieAnimation from "@/components/lottie-animation";
+import { trpc } from "@/trpc/client";
 
 // Dữ liệu animation tối thiểu - có thể thay đổi theo ý muốn
 const registerAnimationData = {
@@ -75,6 +76,38 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
 
+  // Sử dụng tRPC signup mutation
+  const { mutate: signup } = trpc.auth.signup.useMutation({
+    onSuccess: (data) => {
+      toast({
+        title: "Đăng ký thành công",
+        description: data.message || "Chào mừng bạn đến với LinguaPlay!",
+        duration: 5000,
+      });
+
+      // Chuyển hướng đến trang đăng nhập với thông tin đăng nhập
+      setTimeout(() => {
+        router.push(
+          `/login?email=${encodeURIComponent(
+            email
+          )}&password=${encodeURIComponent(password)}`
+        );
+        router.refresh();
+      }, 2000);
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Đăng ký thất bại",
+        description: error.message || "Có lỗi xảy ra khi đăng ký",
+        duration: 5000,
+      });
+    },
+    onSettled: () => {
+      setIsLoading(false);
+    },
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -127,59 +160,13 @@ export default function RegisterPage() {
       return;
     }
 
-    try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          username,
-          fullName: fullName || null,
-        }),
-        credentials: "include",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        toast({
-          variant: "destructive",
-          title: "Đăng ký thất bại",
-          description: data.error || "Có lỗi xảy ra khi đăng ký",
-          duration: 5000,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      toast({
-        title: "Đăng ký thành công",
-        description: data.message || "Chào mừng bạn đến với LinguaPlay!",
-        duration: 5000,
-      });
-
-      // Chuyển hướng đến trang đăng nhập với thông tin đăng nhập
-      setTimeout(() => {
-        router.push(
-          `/login?email=${encodeURIComponent(
-            email
-          )}&password=${encodeURIComponent(password)}`
-        );
-        router.refresh();
-      }, 2000);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Lỗi hệ thống",
-        description: "Có lỗi xảy ra, vui lòng thử lại sau",
-        duration: 5000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Gọi signup mutation
+    signup({
+      username,
+      email,
+      password,
+      fullName: fullName || undefined,
+    });
   };
 
   return (
@@ -239,76 +226,76 @@ export default function RegisterPage() {
             </p>
           </div>
 
-              <div className="space-y-2">
+          <div className="space-y-2">
             <Label htmlFor="email">
               Email <span className="text-red-500">*</span>
             </Label>
-                <Input
+            <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="h-12"
-                />
-              </div>
+              required
+              className="h-12"
+            />
+          </div>
 
-              <div className="space-y-2">
+          <div className="space-y-2">
             <Label htmlFor="fullName">Họ và tên</Label>
-                <Input
+            <Input
               id="fullName"
               type="text"
               placeholder="Nguyễn Văn A"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-                  className="h-12"
-                />
-              </div>
+              className="h-12"
+            />
+          </div>
 
-              <div className="space-y-2">
+          <div className="space-y-2">
             <Label htmlFor="password">
               Mật khẩu <span className="text-red-500">*</span>
             </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-12"
-                />
-              </div>
+              required
+              className="h-12"
+            />
+          </div>
 
-              <div className="space-y-2">
+          <div className="space-y-2">
             <Label htmlFor="confirmPassword">
               Xác nhận mật khẩu <span className="text-red-500">*</span>
             </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="h-12"
-                />
-              </div>
+              required
+              className="h-12"
+            />
+          </div>
 
-            <Button
-              type="submit"
-              disabled={isLoading}
+          <Button
+            type="submit"
+            disabled={isLoading}
             className="game-button h-12 w-full"
-            >
-              {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <>
+          >
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <>
                 Đăng ký <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
+              </>
+            )}
+          </Button>
         </form>
 
         <div className="mt-6 text-center">

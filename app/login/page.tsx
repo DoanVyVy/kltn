@@ -11,7 +11,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import LottieAnimation from "@/components/lottie-animation";
+import dynamic from "next/dynamic";
+import { trpc } from "@/trpc/client";
+
+// Import LottieAnimation chỉ ở phía client
+const LottieAnimation = dynamic(() => import("@/components/lottie-animation"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-64 w-full">
+      <div className="animate-pulse rounded-full bg-gray-200 h-16 w-16"></div>
+    </div>
+  ),
+});
 
 // Dữ liệu animation tối thiểu
 const loginAnimationData = {
@@ -80,6 +91,33 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Sử dụng trpc login mutation
+  const { mutate: login } = trpc.auth.login.useMutation({
+    onSuccess: (data) => {
+      toast({
+        title: "Đăng nhập thành công",
+        description: "Chào mừng bạn quay trở lại!",
+        duration: 3000,
+      });
+
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 100);
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Đăng nhập thất bại",
+        description: error.message || "Có lỗi xảy ra khi đăng nhập",
+        duration: 5000,
+      });
+    },
+    onSettled: () => {
+      setIsLoading(false);
+    },
+  });
+
   // Tự động điền thông tin từ URL
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -105,63 +143,8 @@ export default function LoginPage() {
       return;
     }
 
-    try {
-      console.log("Đang gửi request đăng nhập với email:", email);
-
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: "include",
-      });
-
-      const data = await response.json();
-      console.log("Phản hồi từ server:", {
-        status: response.status,
-        ok: response.ok,
-        data: data,
-      });
-
-      if (!response.ok) {
-        const errorMessage = data.error || "Có lỗi xảy ra khi đăng nhập";
-        console.error("Lỗi đăng nhập:", errorMessage);
-
-        toast({
-          variant: "destructive",
-          title: "Đăng nhập thất bại",
-          description: errorMessage,
-          duration: 5000,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      console.log("Đăng nhập thành công, chuyển hướng đến dashboard");
-
-      toast({
-        title: "Đăng nhập thành công",
-        description: "Chào mừng bạn quay trở lại!",
-        duration: 3000,
-      });
-
-      setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 100);
-    } catch (error) {
-      console.error("Lỗi không mong muốn:", error);
-
-      toast({
-        variant: "destructive",
-        title: "Lỗi hệ thống",
-        description: "Có lỗi xảy ra, vui lòng thử lại sau",
-        duration: 5000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Gọi trực tiếp đến mutation
+    login({ email, password });
   };
 
   return (

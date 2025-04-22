@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Trophy, RefreshCw, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { trpc } from "@/trpc/client";
+import { useToast } from "@/hooks/use-toast";
 
 // Define interfaces
 interface Grammar {
@@ -47,6 +49,19 @@ export const GrammarGame = ({ grammar, onComplete }: GrammarGameProps) => {
   const [score, setScore] = useState(0);
   const [gameCompleted, setGameCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  // TRPC mutation to save user's answer
+  const { mutate: saveUserAnswer } =
+    trpc.userProcess.userAnswerFlashcard.useMutation({
+      onError: (error) => {
+        toast({
+          title: "Lỗi",
+          description: `Không thể lưu câu trả lời: ${error.message}`,
+          variant: "destructive",
+        });
+      },
+    });
 
   // Generate questions based on the grammar
   useEffect(() => {
@@ -425,7 +440,7 @@ export const GrammarGame = ({ grammar, onComplete }: GrammarGameProps) => {
 
   // Handle answer selection
   const handleAnswerSelect = (answer: string) => {
-    if (selectedAnswer !== null) return; // Already answered
+    if (selectedAnswer !== null || !grammar) return; // Already answered or no grammar
 
     const currentQuestion = questions[currentQuestionIndex];
     const correct = answer === currentQuestion.correctAnswer;
@@ -436,6 +451,13 @@ export const GrammarGame = ({ grammar, onComplete }: GrammarGameProps) => {
     if (correct) {
       setScore(score + 1);
     }
+
+    // Save user's answer to the database
+    saveUserAnswer({
+      grammarId: grammar.contentId,
+      categoryId: grammar.categoryId,
+      correct: correct,
+    });
 
     // Move to next question after a delay
     setTimeout(() => {

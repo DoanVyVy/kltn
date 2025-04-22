@@ -26,11 +26,11 @@ model User {
   updatedAt            DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
   role                 String                @default("user") @map("role")
   userAchievements     UserAchievement[]
-  userActivities       UserActivity[]
   userProgress         UserProgress[]
   leaderboardEntries   LeaderboardEntry[]
-  userFlashCardAnswers UserFlashCardAnswer[]
+  userLearningAnswers  UserLearningAnswer[]
   userReviewWords      UserReviewWord[]
+  userReviewGrammars   UserReviewGrammar[]
 
   @@map("users")
   @@schema("public")
@@ -107,7 +107,7 @@ model VocabularyWord {
   category             Category              @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   gameQuestions        GameQuestion[]
   paronymWords         String[]
-  userFlashCardAnswers UserFlashCardAnswer[]
+  userLearningAnswers  UserLearningAnswer[]
   userReviewWords      UserReviewWord[]
   definitions          Json                  @default("[]") @db.Json
 
@@ -128,6 +128,8 @@ model GrammarContent {
   orderIndex    Int?           @map("order_index")
   category      Category       @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   gameQuestions GameQuestion[]
+  userLearningAnswers UserLearningAnswer[]
+  userReviewGrammars UserReviewGrammar[]
 
   @@index([categoryId])
   @@map("grammar_contents")
@@ -158,7 +160,6 @@ model GameActivity {
   instructions     String?
   gameType         GameType       @relation(fields: [gameTypeId], references: [gameTypeId], onDelete: Cascade)
   gameQuestions    GameQuestion[]
-  userActivities   UserActivity[]
 
   @@index([gameTypeId])
   @@map("game_activities")
@@ -182,7 +183,6 @@ model GameQuestion {
   activity         GameActivity    @relation(fields: [activityId], references: [activityId], onDelete: Cascade)
   vocabularyWord   VocabularyWord? @relation(fields: [relatedWordId], references: [wordId], onDelete: SetNull)
   grammarContent   GrammarContent? @relation(fields: [relatedGrammarId], references: [contentId], onDelete: SetNull)
-  userAnswers      UserAnswer[]
 
   @@index([activityId])
   @@index([relatedWordId])
@@ -191,59 +191,24 @@ model GameQuestion {
   @@schema("public")
 }
 
-model UserActivity {
-  activityLogId    Int           @id @default(autoincrement()) @map("activity_log_id")
-  userId           String        @map("user_id") @db.Uuid
-  activityId       Int?          @map("activity_id")
-  startTime        DateTime      @default(now()) @map("start_time") @db.Timestamptz(6)
-  endTime          DateTime?     @map("end_time") @db.Timestamptz(6)
-  score            Int?
-  answersCorrect   Int           @default(0) @map("answers_correct")
-  answersWrong     Int           @default(0) @map("answers_wrong")
-  pointsEarned     Int           @default(0) @map("points_earned")
-  completionStatus String        @default("incomplete") @map("completion_status")
-  user             User          @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  activity         GameActivity? @relation(fields: [activityId], references: [activityId], onDelete: SetNull)
-  userAnswers      UserAnswer[]
-
-  @@index([userId])
-  @@index([activityId])
-  @@map("user_activities")
-  @@schema("public")
-}
-
-model UserAnswer {
-  answerId         Int           @id @default(autoincrement()) @map("answer_id")
-  activityLogId    Int           @map("activity_log_id")
-  questionId       Int?          @map("question_id")
-  userAnswer       String?       @map("user_answer")
-  isCorrect        Boolean?      @map("is_correct")
-  timeTakenSeconds Int?          @map("time_taken_seconds")
-  pointsEarned     Int           @default(0) @map("points_earned")
-  userActivity     UserActivity  @relation(fields: [activityLogId], references: [activityLogId], onDelete: Cascade)
-  gameQuestion     GameQuestion? @relation(fields: [questionId], references: [questionId], onDelete: SetNull)
-
-  @@index([activityLogId])
-  @@index([questionId])
-  @@map("user_answers")
-  @@schema("public")
-}
-
-model UserFlashCardAnswer {
+model UserLearningAnswer {
   id        Int            @id @default(autoincrement())
   userId    String         @map("user_id") @db.Uuid
-  wordId    Int            @map("word_id")
+  wordId    Int?           @map("word_id")
+  grammarId Int?           @map("grammar_id")
   isCorrect Boolean        @map("is_correct")
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   processId Int            @map("process_id")
   user      User           @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  word      VocabularyWord @relation(fields: [wordId], references: [wordId], onDelete: Cascade)
-  process   UserProgress   @relation(fields: [processId], references: [progressId], onDelete: Cascade)
-  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  word      VocabularyWord? @relation(fields: [wordId], references: [wordId], onDelete: SetNull)
+  grammar   GrammarContent? @relation(fields: [grammarId], references: [contentId], onDelete: SetNull)
+  progress  UserProgress    @relation(fields: [processId], references: [progressId], onDelete: Cascade)
 
   @@index([userId])
   @@index([wordId])
+  @@index([grammarId])
   @@index([processId])
-  @@map("user_flashcard_answers")
+  @@map("user_learning_answers")
   @@schema("public")
 }
 
@@ -262,6 +227,20 @@ model UserReviewWord {
   @@schema("public")
 }
 
+model UserReviewGrammar {
+  id        Int            @id @default(autoincrement())
+  userId    String         @map("user_id") @db.Uuid
+  grammarId Int            @map("grammar_id")
+  addedAt   DateTime       @default(now()) @map("added_at") @db.Timestamptz(6)
+  user      User           @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  grammar   GrammarContent @relation(fields: [grammarId], references: [contentId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([grammarId])
+  @@map("user_review_grammar")
+  @@schema("public")
+}
+
 model UserProgress {
   progressId           Int                   @id @default(autoincrement()) @map("progress_id")
   userId               String                @map("user_id") @db.Uuid
@@ -270,9 +249,10 @@ model UserProgress {
   timesPracticed       Int                   @default(0) @map("times_practiced")
   lastPracticed        DateTime?             @map("last_practiced") @db.Timestamptz(6)
   nextReviewDate       DateTime?             @map("next_review_date") @db.Timestamptz(6)
+  contentType          String                @default("vocabulary") @map("content_type") // "vocabulary" or "grammar"
   user                 User                  @relation(fields: [userId], references: [userId], onDelete: Cascade)
   category             Category?             @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
-  userFlashCardAnswers UserFlashCardAnswer[]
+  userLearningAnswers  UserLearningAnswer[]
   processPercentage    Int                   @default(0) @map("process_percentage")
 
   @@index([userId])

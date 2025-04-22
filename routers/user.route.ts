@@ -163,33 +163,48 @@ export const userRouter = createTRPCRouter({
 
       if (!userId) return null;
 
-      // Đếm số từ vựng đã học (sửa lại logic, không dùng distinct)
-      const vocabAnswers = await db.userFlashCardAnswer.findMany({
+      // Count vocabulary words learned (using unique wordIds with isCorrect = true)
+      const vocabAnswers = await db.userLearningAnswer.findMany({
         where: {
           userId,
           isCorrect: true,
+          wordId: { not: null },
         },
         select: {
           wordId: true,
         },
       });
 
-      // Lấy số lượng từ vựng duy nhất
-      const uniqueWordIds = [...new Set(vocabAnswers.map((a) => a.wordId))];
+      // Get unique vocabulary words
+      const uniqueWordIds = [
+        ...new Set(vocabAnswers.map((a: { wordId: number | null }) => a.wordId).filter((id): id is number => id !== null)),
+      ];
       const vocabularyCount = uniqueWordIds.length;
 
-      // Đếm số ngữ pháp đã học
-      const grammarProgress = await db.userProgress.count({
+      // Count grammar rules learned (using unique grammarIds with isCorrect = true)
+      const grammarAnswers = await db.userLearningAnswer.findMany({
         where: {
           userId,
-          category: {
-            isVocabularyCourse: false,
-          },
+          isCorrect: true,
+          grammarId: { not: null },
+        },
+        select: {
+          grammarId: true,
         },
       });
 
-      // Đếm số trò chơi đã chơi
-      const gamesPlayed = await db.userActivity.count({
+      // Get unique grammar rules
+      const uniqueGrammarIds = [
+        ...new Set(
+          grammarAnswers
+            .filter((a: { grammarId: number | null }) => a.grammarId !== null)
+            .map((a: { grammarId: number | null }) => a.grammarId as number)
+        ),
+      ];
+      const grammarCount = uniqueGrammarIds.length;
+
+      // Count total learning activities
+      const totalActivities = await db.userLearningAnswer.count({
         where: {
           userId,
         },
@@ -197,8 +212,8 @@ export const userRouter = createTRPCRouter({
 
       return {
         vocabularyCount,
-        grammarCount: grammarProgress,
-        gamesPlayed,
+        grammarCount,
+        gamesPlayed: totalActivities,
       };
     }),
 
@@ -373,6 +388,218 @@ export const userRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  getUserProfile: baseProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ ctx: { db }, input }) => {
+      const { userId } = input;
+
+      if (!userId) return null;
+
+      // Get user basic info
+      const user = await db.user.findUnique({
+        where: { userId },
+        select: {
+          userId: true,
+          username: true,
+          email: true,
+          fullName: true,
+          avatarUrl: true,
+          currentLevel: true,
+          totalPoints: true,
+          streakDays: true,
+          lastActiveDate: true,
+          createdAt: true,
+          role: true,
+        },
+      });
+
+      if (!user) return null;
+
+      let uniqueWordIds: number[] = [];
+      let uniqueGrammarIds: number[] = [];
+
+      type LearningAnswer = {
+        wordId: number | null;
+        grammarId: number | null;
+      };
+
+      try {
+        const learningAnswers: LearningAnswer[] =
+          await db.userLearningAnswer.findMany({
+            where: {
+              userId,
+              isCorrect: true,
+            },
+            select: {
+              wordId: true,
+              grammarId: true,
+            },
+          });
+
+        // Safely extract the word IDs
+        const wordIds = learningAnswers
+          .filter((answer: LearningAnswer) => answer.wordId !== null)
+          .map((answer: LearningAnswer) => answer.wordId)
+          .filter((id: any) => typeof id === "number");
+
+        uniqueWordIds = [...new Set(wordIds)] as number[];
+
+        // Safely extract the grammar IDs
+        const grammarIds = learningAnswers
+          .filter((answer: LearningAnswer) => answer.grammarId !== null)
+          .map((answer: LearningAnswer) => answer.grammarId)
+          .filter((id: any) => typeof id === "number");
+
+        uniqueGrammarIds = [...new Set(grammarIds)] as number[];
+      } catch (error) {
+        console.error("Error fetching learning answers:", error);
+        // Continue with empty arrays if table doesn't exist yet
+      }
+
+      // Get user achievements
+      const userAchievements = await db.userAchievement.findMany({
+        where: { userId },
+        include: {
+          achievement: true,
+        },
+        orderBy: {
+          dateAchieved: "desc",
+        },
+      });
+
+      type WordCategory = {
+        categoryId: number;
+        categoryName: string;
+        vocabularyWords?: { wordId: number }[];
+      };
+
+      type GrammarCategory = {
+        categoryId: number;
+        categoryName: string;
+        grammarContents?: { contentId: number }[];
+      };
+
+      // Get word categories learned - handle empty arrays
+      let wordCategories: WordCategory[] = [];
+      if (uniqueWordIds.length > 0) {
+        try {
+          wordCategories = await db.category.findMany({
+            where: {
+              isVocabularyCourse: true,
+              vocabularyWords: {
+                some: {
+                  wordId: {
+                    in: uniqueWordIds,
+                  },
+                },
+              },
+            },
+            select: {
+              categoryId: true,
+              categoryName: true,
+              vocabularyWords: {
+                where: {
+                  wordId: {
+                    in: uniqueWordIds,
+                  },
+                },
+                select: {
+                  wordId: true,
+                },
+              },
+            },
+          });
+        } catch (error) {
+          console.error("Error fetching word categories:", error);
+        }
+      }
+
+      // Get grammar categories learned - handle empty arrays
+      let grammarCategories: GrammarCategory[] = [];
+      if (uniqueGrammarIds.length > 0) {
+        try {
+          grammarCategories = await db.category.findMany({
+            where: {
+              isVocabularyCourse: false,
+              grammarContents: {
+                some: {
+                  contentId: {
+                    in: uniqueGrammarIds,
+                  },
+                },
+              },
+            },
+            select: {
+              categoryId: true,
+              categoryName: true,
+              grammarContents: {
+                where: {
+                  contentId: {
+                    in: uniqueGrammarIds,
+                  },
+                },
+                select: {
+                  contentId: true,
+                },
+              },
+            },
+          });
+        } catch (error) {
+          console.error("Error fetching grammar categories:", error);
+        }
+      }
+
+      // Get games completed count
+      const userProgress = await db.userProgress.findMany({
+        where: { userId },
+      });
+      const gamesCompleted = userProgress.reduce(
+        (total, progress) => total + progress.timesPracticed,
+        0
+      );
+
+      // Format achievements
+      const achievements = userAchievements.map((ua) => ({
+        id: ua.achievementId,
+        title: ua.achievement.title,
+        description: ua.achievement.description,
+        icon: ua.achievement.iconUrl || "",
+        category: ua.achievement.title.toLowerCase().includes("vocabulary")
+          ? "vocabulary"
+          : "grammar",
+        dateAchieved: ua.dateAchieved,
+        completed: true,
+      }));
+
+      // Format word categories - safely handle undefined properties
+      const wordCategoriesFormatted = wordCategories.map(
+        (cat: WordCategory) => ({
+          categoryId: cat.categoryId,
+          name: cat.categoryName,
+          count: cat.vocabularyWords ? cat.vocabularyWords.length : 0,
+        })
+      );
+
+      // Format grammar categories - safely handle undefined properties
+      const grammarCategoriesFormatted = grammarCategories.map(
+        (cat: GrammarCategory) => ({
+          categoryId: cat.categoryId,
+          name: cat.categoryName,
+          count: cat.grammarContents ? cat.grammarContents.length : 0,
+        })
+      );
+
+      return {
+        ...user,
+        wordsLearned: uniqueWordIds.length,
+        grammarRulesLearned: uniqueGrammarIds.length,
+        gamesCompleted,
+        achievements,
+        wordCategories: wordCategoriesFormatted,
+        grammarCategories: grammarCategoriesFormatted,
+      };
     }),
 });
 
