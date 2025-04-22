@@ -33,7 +33,7 @@ export default function DeleteVocabularyDialog({
           title: "Thành công",
           description: "Đã xóa từ vựng",
         });
-        utils.vocabulary.getAll.invalidate();
+        utils.vocabularyWord.getAll.invalidate();
         setIsOpen(false);
         onSuccess();
       },

@@ -34,7 +34,7 @@ export default function EditVocabularyDialog({
           title: "Thành công",
           description: "Đã cập nhật từ vựng",
         });
-        utils.vocabulary.getAll.invalidate();
+        utils.vocabularyWord.getAll.invalidate();
         setIsOpen(false);
         onSuccess();
       },

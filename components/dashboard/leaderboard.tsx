@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Crown,
@@ -23,15 +23,17 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/trpc/client";
 
 // Types
 interface LeaderboardUserBase {
-  id: number;
+  id: string; // Cập nhật từ number sang string để phù hợp với userId
   name: string;
   avatar_url?: string;
   current_xp: number;
   level: number;
   learning_streak?: number;
+  rank?: number;
 }
 
 interface LeaderboardUserWithCurrentFlag extends LeaderboardUserBase {
@@ -43,7 +45,10 @@ type ProcessedLeaderboardUser = LeaderboardUserWithCurrentFlag;
 
 interface LeaderboardProps {
   data?: LeaderboardUserBase[];
-  currentUserId?: number;
+  currentUserId?: string; // Cập nhật từ number sang string
+  initialPeriod?: "weekly" | "monthly" | "allTime";
+  showPeriodSelector?: boolean;
+  maxDisplayCount?: number;
 }
 
 // Helper components
@@ -145,7 +150,7 @@ const LeaderboardUserItem = ({
               <Users className="mr-1 h-3 w-3" />
               Cấp {user.level || 1}
             </span>
-            {user.learning_streak !== undefined && (
+            {user.learning_streak !== undefined && user.learning_streak > 0 && (
               <span className="flex items-center">
                 <Flame className="mr-1 h-3 w-3 text-amber-500" />
                 {user.learning_streak} ngày
@@ -165,138 +170,105 @@ const LeaderboardUserItem = ({
   );
 };
 
-// Mock data as fallback
-const mockLeaderboardData: ProcessedLeaderboardUser[] = [
-  {
-    id: 1,
-    name: "Minh Anh",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 2450,
-    level: 15,
-    learning_streak: 21,
-    isCurrentUser: false,
-  },
-  {
-    id: 2,
-    name: "Hoàng Nam",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 2320,
-    level: 14,
-    learning_streak: 18,
-    isCurrentUser: false,
-  },
-  {
-    id: 3,
-    name: "Thúy Linh",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 2180,
-    level: 13,
-    learning_streak: 14,
-    isCurrentUser: false,
-  },
-  {
-    id: 4,
-    name: "Quang Minh",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1950,
-    level: 12,
-    learning_streak: 12,
-    isCurrentUser: false,
-  },
-  {
-    id: 5,
-    name: "Hà Trang",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1820,
-    level: 11,
-    learning_streak: 9,
-    isCurrentUser: false,
-  },
-  {
-    id: 6,
-    name: "Đức Anh",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1750,
-    level: 11,
-    learning_streak: 7,
-    isCurrentUser: false,
-  },
-  {
-    id: 7,
-    name: "Alex",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1680,
-    level: 10,
-    learning_streak: 7,
-    isCurrentUser: false,
-  },
-  {
-    id: 8,
-    name: "Thanh Hà",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1520,
-    level: 9,
-    learning_streak: 5,
-    isCurrentUser: false,
-  },
-  {
-    id: 9,
-    name: "Minh Tuấn",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1480,
-    level: 9,
-    learning_streak: 4,
-    isCurrentUser: false,
-  },
-  {
-    id: 10,
-    name: "Thu Hương",
-    avatar_url: "/placeholder-user.jpg",
-    current_xp: 1350,
-    level: 8,
-    learning_streak: 3,
-    isCurrentUser: false,
-  },
-];
-
-export function Leaderboard({ data = [], currentUserId }: LeaderboardProps) {
+export function Leaderboard({
+  data = [],
+  currentUserId,
+  initialPeriod = "weekly",
+  showPeriodSelector = true,
+  maxDisplayCount = 5,
+}: LeaderboardProps) {
   const [period, setPeriod] = useState<"weekly" | "monthly" | "allTime">(
-    "weekly"
+    initialPeriod
   );
   const [expanded, setExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<
+    ProcessedLeaderboardUser[]
+  >([]);
 
-  // Process the real data or use mock data if none is provided
-  const processedData: ProcessedLeaderboardUser[] = useMemo(() => {
+  // Fetch leaderboard data from API if no data provided
+  const { data: leaderboardResult, isLoading: isFetchingLeaderboard } =
+    trpc.leaderboard.getLeaderboard.useQuery(
+      { period, limit: 20 },
+      { enabled: data.length === 0 } // Only fetch if no data provided
+    );
+
+  useEffect(() => {
+    setIsLoading(isFetchingLeaderboard);
+
+    // Use provided data or API data
     if (data && data.length > 0) {
-      // Map the real data and mark the current user
-      return data.map((user) => ({
+      // Map the provided data and mark the current user
+      const processedData = data.map((user) => ({
         ...user,
         isCurrentUser: user.id === currentUserId,
       }));
+      setLeaderboardData(processedData);
+    } else if (leaderboardResult && leaderboardResult.entries) {
+      // Map the API data and mark the current user
+      const processedData = leaderboardResult.entries.map((entry) => ({
+        id: entry.userId,
+        name: entry.name,
+        avatar_url: entry.avatar_url,
+        current_xp: entry.current_xp,
+        level: entry.level,
+        learning_streak: entry.learning_streak,
+        rank: entry.rank,
+        isCurrentUser: entry.userId === currentUserId,
+      }));
+      setLeaderboardData(processedData);
     }
-    // Fallback to mock data if no real data is provided
-    return mockLeaderboardData;
-  }, [data, currentUserId]);
+  }, [data, leaderboardResult, currentUserId, isFetchingLeaderboard]);
 
   // Tìm vị trí của người dùng hiện tại
   const currentUserIndex = useMemo(
-    () => processedData.findIndex((user) => user.isCurrentUser),
-    [processedData]
+    () => leaderboardData.findIndex((user) => user.isCurrentUser),
+    [leaderboardData]
   );
-  const currentUserRank = currentUserIndex + 1;
+  const currentUserRank =
+    currentUserIndex !== -1
+      ? leaderboardData[currentUserIndex].rank || currentUserIndex + 1
+      : 0;
 
   // Xác định số lượng người dùng hiển thị
-  const displayCount = expanded ? processedData.length : 5;
+  const displayCount = expanded ? leaderboardData.length : maxDisplayCount;
 
   // Tạo danh sách người dùng hiển thị
   const displayedUsers = useMemo(
-    () => (expanded ? processedData : processedData.slice(0, 5)),
-    [expanded, processedData]
+    () =>
+      expanded ? leaderboardData : leaderboardData.slice(0, maxDisplayCount),
+    [expanded, leaderboardData, maxDisplayCount]
   );
 
   // Kiểm tra xem người dùng hiện tại có nằm trong top hiển thị không
   const currentUserVisible =
     currentUserIndex < displayCount && currentUserIndex >= 0;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <Card className="game-card overflow-hidden h-full">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center text-xl text-game-accent">
+                <Trophy className="mr-2 h-5 w-5 text-game-primary" />
+                Bảng xếp hạng
+              </CardTitle>
+              <CardDescription className="text-game-accent/70">
+                Đang tải dữ liệu...
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="flex justify-center items-center p-8">
+            <Trophy className="h-10 w-10 text-game-primary/20 animate-pulse" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="game-card overflow-hidden h-full">
@@ -311,23 +283,25 @@ export function Leaderboard({ data = [], currentUserId }: LeaderboardProps) {
               Những người học tích cực nhất
             </CardDescription>
           </div>
-          <Tabs
-            value={period}
-            onValueChange={(value) => setPeriod(value as any)}
-            className="w-auto"
-          >
-            <TabsList className="grid w-full grid-cols-3 h-8">
-              <TabsTrigger value="weekly" className="text-xs px-2">
-                Tuần
-              </TabsTrigger>
-              <TabsTrigger value="monthly" className="text-xs px-2">
-                Tháng
-              </TabsTrigger>
-              <TabsTrigger value="allTime" className="text-xs px-2">
-                Tất cả
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {showPeriodSelector && (
+            <Tabs
+              value={period}
+              onValueChange={(value) => setPeriod(value as any)}
+              className="w-auto"
+            >
+              <TabsList className="grid w-full grid-cols-3 h-8">
+                <TabsTrigger value="weekly" className="text-xs px-2">
+                  Tuần
+                </TabsTrigger>
+                <TabsTrigger value="monthly" className="text-xs px-2">
+                  Tháng
+                </TabsTrigger>
+                <TabsTrigger value="allTime" className="text-xs px-2">
+                  Tất cả
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -342,7 +316,7 @@ export function Leaderboard({ data = [], currentUserId }: LeaderboardProps) {
           </div>
         </div>
 
-        {processedData.length > 0 ? (
+        {leaderboardData.length > 0 ? (
           <>
             <div className="divide-y divide-gray-100">
               <AnimatePresence>
@@ -350,7 +324,7 @@ export function Leaderboard({ data = [], currentUserId }: LeaderboardProps) {
                   <LeaderboardUserItem
                     key={user.id}
                     user={user}
-                    rank={index + 1}
+                    rank={user.rank || index + 1}
                   />
                 ))}
               </AnimatePresence>
@@ -363,7 +337,7 @@ export function Leaderboard({ data = [], currentUserId }: LeaderboardProps) {
                   • • •
                 </div>
                 <LeaderboardUserItem
-                  user={processedData[currentUserIndex]}
+                  user={leaderboardData[currentUserIndex]}
                   rank={currentUserRank}
                 />
               </>
@@ -376,7 +350,7 @@ export function Leaderboard({ data = [], currentUserId }: LeaderboardProps) {
         )}
 
         {/* Nút xem thêm/thu gọn */}
-        {processedData.length > 5 && (
+        {leaderboardData.length > maxDisplayCount && (
           <div className="p-2 flex justify-center">
             <Button
               variant="ghost"

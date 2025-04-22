@@ -10,6 +10,8 @@ import userLearnedWordsRouter from "./user_learned_words.route";
 import { userReviewWordsRouter } from "./user_review_words.route";
 import userLearnedGrammarRouter from "./user_learned_grammar.route";
 import authRouter from "./auth.route";
+import leaderboardRouter from "./leaderboard.route";
+import achievementRouter from "./achievement.route";
 
 export const appRouter = createTRPCRouter({
   category: categoryRouter,
@@ -23,6 +25,8 @@ export const appRouter = createTRPCRouter({
   userReviewWords: userReviewWordsRouter,
   userLearnedGrammar: userLearnedGrammarRouter,
   auth: authRouter,
+  leaderboard: leaderboardRouter,
+  achievement: achievementRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -9,6 +9,7 @@ import Navigation from "@/components/navigation";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { GameCard } from "@/components/dashboard/game-card";
 import { AchievementCard } from "@/components/dashboard/achievement-card";
+import { AchievementNotification } from "@/components/dashboard/achievement-notification";
 import { SectionHeader } from "@/components/dashboard/section-header";
 import { Leaderboard } from "@/components/dashboard/leaderboard";
 import { GAME_CATEGORIES } from "@/lib/constants";
@@ -54,6 +55,8 @@ export default function DashboardPage() {
     availableGames: 5,
   });
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [showAchievementNotification, setShowAchievementNotification] =
+    useState(true);
 
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -313,6 +316,15 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-game-background">
       <Navigation />
 
+      {/* Achievement notification component */}
+      {showAchievementNotification && (
+        <AchievementNotification
+          onClose={() => setShowAchievementNotification(false)}
+          autoCheckAchievements={true}
+          autoCloseTimeout={8000}
+        />
+      )}
+
       <main className="container mx-auto px-4 py-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -532,7 +544,7 @@ export default function DashboardPage() {
               </div>
             </SectionHeader>
 
-            <SectionHeader title="Thành tích gần đây" delay={0.6}>
+            {/* <SectionHeader title="Thành tích gần đây" delay={0.6}>
               <div className="grid gap-4 md:grid-cols-3">
                 {achievements.map((achievement, index) => (
                   <AchievementCard
@@ -552,7 +564,7 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-            </SectionHeader>
+            </SectionHeader> */}
           </motion.div>
 
           {/* Leaderboard column - visible on desktop */}

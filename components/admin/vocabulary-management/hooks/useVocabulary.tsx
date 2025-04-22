@@ -25,7 +25,7 @@ export default function useVocabulary() {
     data: vocabularies,
     isLoading,
     refetch,
-  } = trpc.vocabulary.getAll.useQuery({
+  } = trpc.vocabularyWord.getAll.useQuery({
     page,
     limit,
     search: searchTerm || undefined,

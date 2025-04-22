@@ -9,8 +9,11 @@ type TRPCRouterType = {
   vocabulary: any;
   grammarContent: any;
   userLearnedWords: any;
+  userLearnedGrammar: any;
   userReviewWords: any;
   useUtils: any;
+  leaderboard: any;
+  achievement: any;
 };
 
 export const trpc = createTRPCReact<AppRouter>();
@@ -30,6 +33,25 @@ export const trpc = createTRPCReact<AppRouter>();
       getCategoryProcesses: {
         invalidate: () => {
           // Implement invalidate logic
+        },
+      },
+    },
+    leaderboard: {
+      getLeaderboard: {
+        invalidate: () => {
+          // Invalidate leaderboard data
+        },
+      },
+    },
+    achievement: {
+      getUserAchievements: {
+        invalidate: () => {
+          // Invalidate achievements data
+        },
+      },
+      checkAchievements: {
+        invalidate: () => {
+          // Invalidate achievements check
         },
       },
     },

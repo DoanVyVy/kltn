@@ -35,10 +35,6 @@ export default function AdminPage() {
         className="space-y-6"
       >
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 gap-2">
-          <TabsTrigger value="dashboard" className="gap-2">
-            <LayoutDashboard size={16} />
-            <span className="hidden md:inline">Tổng quan</span>
-          </TabsTrigger>
           <TabsTrigger value="users" className="gap-2">
             <Users size={16} />
             <span className="hidden md:inline">Người dùng</span>
@@ -60,10 +56,6 @@ export default function AdminPage() {
             <span className="hidden md:inline">Trò chơi</span>
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="dashboard">
-          <AdminDashboard />
-        </TabsContent>
 
         <TabsContent value="users">
           <UserManagement />

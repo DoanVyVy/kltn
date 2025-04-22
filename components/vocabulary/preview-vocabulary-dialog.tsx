@@ -125,7 +125,7 @@ const PreviewVocabularyDialog = memo(
 
         setIsLoadingVocabulary(true);
         try {
-          const data = await utils.vocabulary.getAll.fetch({
+          const data = await utils.vocabularyWord.getAll.fetch({
             page: 1,
             limit: 100,
             categoryId: course.categoryId,
@@ -140,7 +140,7 @@ const PreviewVocabularyDialog = memo(
       };
 
       fetchVocabulary();
-    }, [open, course, utils.vocabulary.getAll]);
+    }, [open, course, utils.vocabularyWord.getAll]);
 
     // Xử lý phát âm thanh
     const handlePlayAudio = (audioUrl: string) => {

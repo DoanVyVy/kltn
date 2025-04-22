@@ -215,7 +215,7 @@ const useVocabularyCounts = (categoryIds: number[]) => {
         const results = await Promise.all(
           categoryIds.map(async (categoryId: number) => {
             // Use prefetching to improve performance
-            const words = await utils.vocabulary.getAll.fetch({
+            const words = await utils.vocabularyWord.getAll.fetch({
               page: 1,
               limit: 1000,
               categoryId,
@@ -238,7 +238,7 @@ const useVocabularyCounts = (categoryIds: number[]) => {
     };
 
     fetchCounts();
-  }, [categoryIdsKey, utils.vocabulary.getAll]);
+  }, [categoryIdsKey, utils.vocabularyWord.getAll]);
 
   return { vocabularyCounts: counts, isLoading };
 };
