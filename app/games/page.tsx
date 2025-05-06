@@ -61,6 +61,17 @@ export default function GamesPage() {
           bestScore: 92,
         },
         {
+          id: "word-squares",
+          title: "Word Squares",
+          description:
+            "Create a grid where words read the same across and down",
+          difficulty: "Medium",
+          image: "/games/word-squares.jpg",
+          category: "vocabulary",
+          playCount: 124,
+          bestScore: 78,
+        },
+        {
           id: "grammar-challenge",
           title: "Grammar Challenge",
           description: "Test your knowledge of English grammar rules",

@@ -62,20 +62,23 @@ const userProcessRouter = createTRPCRouter({
     // Get user's progress data for games
     const gameProgress = await prisma.$queryRaw`
       SELECT * FROM "public"."user_progress"
-      WHERE "user_id" = ${user.user.id}
+      WHERE "user_id" = ${user.user.id}::uuid
       AND "content_type" = 'game'
     `;
 
     // Count game completion records for different game types
     const gameCompletions = await prisma.$queryRaw<UserGameCompletion[]>`
       SELECT * FROM "public"."user_game_completions"
-      WHERE "user_id" = ${user.user.id}
+      WHERE "user_id" = ${user.user.id}::uuid
       ORDER BY "completed_at" DESC
     `;
 
     // Count by game type
     const gameStats = gameCompletions.reduce(
-      (acc: { pronunciationSessions: number; pronunciationScoreTotal: number }, curr: UserGameCompletion) => {
+      (
+        acc: { pronunciationSessions: number; pronunciationScoreTotal: number },
+        curr: UserGameCompletion
+      ) => {
         if (curr.gameType === "pronunciation-check") {
           acc.pronunciationSessions++;
           acc.pronunciationScoreTotal += curr.score || 0;
@@ -187,6 +190,7 @@ const userProcessRouter = createTRPCRouter({
         gameType: z.string(),
         score: z.number().optional(),
         timeTaken: z.number().optional(),
+        difficultyLevel: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }): Promise<any> => {
@@ -195,108 +199,168 @@ const userProcessRouter = createTRPCRouter({
         throw new Error("Unauthorized");
       }
 
-      // Định nghĩa điểm kinh nghiệm dựa trên loại game và kết quả
-      let expPoints = 0;
-      const gameSource = `game-completion-${input.gameType}`;
+      try {
+        // Define experience points based on game type and results
+        let expPoints = 0;
+        const gameSource = `game-completion-${input.gameType}`;
 
-      // Tính điểm kinh nghiệm dựa trên loại game và điểm số
-      if (input.gameType === "pronunciation-check") {
-        // Điểm kinh nghiệm cho phát âm dựa trên điểm số
-        if (input.score) {
-          if (input.score >= 90) expPoints = 50;
-          else if (input.score >= 80) expPoints = 40;
-          else if (input.score >= 70) expPoints = 30;
-          else if (input.score >= 60) expPoints = 20;
-          else expPoints = 10; // Điểm tối thiểu cho việc hoàn thành
+        // Calculate experience points based on game type and score
+        if (input.gameType === "pronunciation-check") {
+          // Experience points for pronunciation based on score
+          if (input.score) {
+            if (input.score >= 90) expPoints = 50;
+            else if (input.score >= 80) expPoints = 40;
+            else if (input.score >= 70) expPoints = 30;
+            else if (input.score >= 60) expPoints = 20;
+            else expPoints = 10; // Minimum points for completion
+          } else {
+            expPoints = 10; // Default if no score
+          }
+        } else if (
+          input.gameType === "word-association" ||
+          input.gameType === "word-guess" ||
+          input.gameType === "sentence-scramble"
+        ) {
+          // Experience points for vocabulary and grammar games
+          if (input.score) {
+            if (input.score >= 90) expPoints = 30;
+            else if (input.score >= 70) expPoints = 20;
+            else expPoints = 10;
+          } else {
+            expPoints = 10;
+          }
         } else {
-          expPoints = 10; // Mặc định nếu không có điểm số
-        }
-      } else if (input.gameType === "word-association" || 
-                input.gameType === "word-guess" || 
-                input.gameType === "sentence-scramble") {
-        // Điểm kinh nghiệm cho các game từ vựng và ngữ pháp
-        if (input.score) {
-          if (input.score >= 90) expPoints = 30;
-          else if (input.score >= 70) expPoints = 20;
-          else expPoints = 10;
-        } else {
+          // Default points for other games
           expPoints = 10;
         }
-      } else {
-        // Điểm mặc định cho các game khác
-        expPoints = 10;
-      }
 
-      // Record game completion bằng cách sử dụng raw SQL
-      await prisma.$executeRaw`
-        INSERT INTO "public"."user_game_completions" 
-        ("user_id", "game_type", "score", "time_taken", "completed_at", "exp_earned")
-        VALUES (${user.user.id}, ${input.gameType}, ${input.score || null}, 
-                ${input.timeTaken || null}, ${new Date()}, ${expPoints})
-      `;
-
-      // Update user's game progress
-      const gameProgress = await prisma.$queryRaw<UserProgress[]>`
-        SELECT * FROM "public"."user_progress" 
-        WHERE "user_id" = ${user.user.id} 
-        AND "content_type" = 'game'
-      `;
-
-      if (gameProgress.length === 0) {
-        // Create new progress record if none exists
+        // Record game completion using raw SQL
         await prisma.$executeRaw`
-          INSERT INTO "public"."user_progress"
-          ("user_id", "content_type", "process_percentage", "times_practiced", "last_practiced")
-          VALUES (${user.user.id}, 'game', 5, 1, ${new Date()})
+          INSERT INTO "public"."user_game_completions" 
+          ("user_id", "game_type", "score", "time_taken", "completed_at", "exp_earned", "difficulty_level")
+          VALUES (${user.user.id}::uuid, ${input.gameType}, ${
+          input.score || null
+        }, 
+                  ${input.timeTaken || null}, ${new Date()}, ${expPoints}, ${
+          input.difficultyLevel || 1
+        })
         `;
-      } else {
-        // Update existing progress
-        const progress = gameProgress[0];
-        const newPercentage = Math.min(
-          progress.processPercentage + 5, 
-          100
-        );
-        
-        await prisma.$executeRaw`
-          UPDATE "public"."user_progress"
-          SET "times_practiced" = "times_practiced" + 1,
-              "process_percentage" = ${newPercentage},
-              "last_practiced" = ${new Date()}
-          WHERE "progress_id" = ${progress.progressId}
+
+        // Update user's game progress
+        const gameProgress = await prisma.$queryRaw<UserProgress[]>`
+          SELECT * FROM "public"."user_progress" 
+          WHERE "user_id" = ${user.user.id}::uuid 
+          AND "content_type" = 'game'
         `;
-      }
 
-      // Thêm điểm kinh nghiệm cho người dùng
-      if (expPoints > 0) {
-        // Sử dụng instance đã tạo
-        await userProcessRouterInstance.mutations.addExperience.resolve(
-          { amount: expPoints, source: gameSource },
-          ctx
-        );
-      }
+        if (gameProgress.length === 0) {
+          // Create new progress record if none exists
+          await prisma.$executeRaw`
+            INSERT INTO "public"."user_progress"
+            ("user_id", "content_type", "process_percentage", "times_practiced", "last_practiced")
+            VALUES (${user.user.id}::uuid, 'game', 5, 1, ${new Date()})
+          `;
+        } else {
+          // Update existing progress
+          const progress = gameProgress[0];
+          const newPercentage = Math.min(progress.processPercentage + 5, 100);
 
-      // Kích hoạt kiểm tra thành tích mới
-      try {
-        const achievementRouter = await import("./achievement.route").then(
-          (mod) => mod.default
-        );
-        // Sử dụng phương thức từ router mà không truy cập vào queries
-        await achievementRouter.createCaller(ctx).checkAchievements();
+          await prisma.$executeRaw`
+            UPDATE "public"."user_progress"
+            SET "times_practiced" = "times_practiced" + 1,
+                "process_percentage" = ${newPercentage},
+                "last_practiced" = ${new Date()}
+            WHERE "progress_id" = ${progress.progressId}
+          `;
+        }
+
+        // Add experience points for the user (directly update user record to avoid circular reference)
+        if (expPoints > 0) {
+          // Update user's total points
+          await prisma.user.update({
+            where: {
+              userId: user.user.id,
+            },
+            data: {
+              totalPoints: { increment: expPoints },
+              lastActiveDate: new Date(),
+            },
+          });
+
+          // Update active leaderboards
+          try {
+            await prisma.$transaction(async (tx) => {
+              const activeLeaderboards = await tx.leaderboard.findMany({
+                where: {
+                  startDate: { lte: new Date() },
+                  OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+                },
+              });
+
+              for (const leaderboard of activeLeaderboards) {
+                const existingEntry = await tx.leaderboardEntry.findFirst({
+                  where: {
+                    leaderboardId: leaderboard.leaderboardId,
+                    userId: user.user.id,
+                  },
+                });
+
+                if (existingEntry) {
+                  await tx.leaderboardEntry.update({
+                    where: { entryId: existingEntry.entryId },
+                    data: {
+                      score: { increment: expPoints },
+                      updatedAt: new Date(),
+                    },
+                  });
+                } else {
+                  await tx.leaderboardEntry.create({
+                    data: {
+                      leaderboardId: leaderboard.leaderboardId,
+                      userId: user.user.id,
+                      score: expPoints,
+                      updatedAt: new Date(),
+                    },
+                  });
+                }
+              }
+            });
+          } catch (error) {
+            console.error("Error updating leaderboard with experience:", error);
+            // Continue anyway even if leaderboard update fails
+          }
+        }
+
+        // Get game statistics after update
+        const gameStats = await prisma.$queryRaw<any[]>`
+          SELECT 
+            COUNT(*) FILTER (WHERE game_type = 'pronunciation-check') as pronunciation_sessions,
+            AVG(score) FILTER (WHERE game_type = 'pronunciation-check') as pronunciation_score
+          FROM "public"."user_game_completions"
+          WHERE "user_id" = ${user.user.id}::uuid
+        `;
+
+        // Get user streak days
+        const userData = await prisma.user.findUnique({
+          where: {
+            userId: user.user.id,
+          },
+          select: {
+            streakDays: true,
+          },
+        });
+
+        return {
+          streak: userData?.streakDays || 0,
+          pronunciationSessions:
+            parseInt(gameStats[0].pronunciation_sessions) || 0,
+          pronunciationScore: Math.round(gameStats[0].pronunciation_score) || 0,
+          expEarned: expPoints,
+        };
       } catch (error) {
-        console.error("Error checking achievements after game completion:", error);
-        // Tiếp tục dù có lỗi khi kiểm tra thành tích
+        console.error("Error completing game:", error);
+        throw new Error(`Failed to complete game: ${error.message}`);
       }
-
-      // Get game statistics after update
-      const gameStats = await userProcessRouterInstance.queries.getGameStats.resolve(
-        undefined,
-        ctx
-      );
-
-      return {
-        ...gameStats,
-        expEarned: expPoints,
-      };
     }),
 
   userAnswerFlashcard: baseProcedure
@@ -334,7 +398,7 @@ const userProcessRouter = createTRPCRouter({
           VALUES (${user.user.id}, ${input.categoryId}, 0, ${contentType})
           RETURNING *
         `;
-        
+
         // Fetch the newly created progress
         const fetchedProgress = await prisma.$queryRaw<UserProgress[]>`
           SELECT * FROM "public"."user_progress"
@@ -344,7 +408,7 @@ const userProcessRouter = createTRPCRouter({
           ORDER BY "progress_id" DESC
           LIMIT 1
         `;
-        
+
         progress = fetchedProgress[0];
       } else {
         progress = progressResult[0];
@@ -354,7 +418,9 @@ const userProcessRouter = createTRPCRouter({
       await prisma.$executeRaw`
         INSERT INTO "public"."user_learning_answers"
         ("user_id", "word_id", "grammar_id", "is_correct", "created_at", "process_id")
-        VALUES (${user.user.id}, ${input.wordId || null}, ${input.grammarId || null}, 
+        VALUES (${user.user.id}, ${input.wordId || null}, ${
+        input.grammarId || null
+      }, 
                 ${input.correct}, ${new Date()}, ${progress.progressId})
       `;
 
@@ -382,7 +448,8 @@ const userProcessRouter = createTRPCRouter({
           `;
         }
 
-        isFirstTimeCorrect = !previousCorrectAnswers || previousCorrectAnswers.length === 0;
+        isFirstTimeCorrect =
+          !previousCorrectAnswers || previousCorrectAnswers.length === 0;
       }
 
       // Award EXP points based on the answer and item type
@@ -393,8 +460,10 @@ const userProcessRouter = createTRPCRouter({
         : 0; // No points for incorrect answers
 
       if (expPoints > 0) {
-        const source = input.wordId ? "vocabulary-learning" : "grammar-learning";
-        
+        const source = input.wordId
+          ? "vocabulary-learning"
+          : "grammar-learning";
+
         // Sử dụng instance đã tạo
         await userProcessRouterInstance.mutations.addExperience.resolve(
           { amount: expPoints, source },
@@ -407,13 +476,13 @@ const userProcessRouter = createTRPCRouter({
       let correctUnique: UserLearningAnswerGroupByOutputItem[] = [];
 
       if (input.wordId) {
-        const totalResult = await prisma.$queryRaw<[{count: number}]>`
+        const totalResult = await prisma.$queryRaw<[{ count: number }]>`
           SELECT COUNT(*) as count FROM "public"."vocabulary_words"
           WHERE "category_id" = ${input.categoryId}
         `;
         total = Number(totalResult[0].count);
 
-        const uniqueWords = await prisma.$queryRaw<[{count: number}]>`
+        const uniqueWords = await prisma.$queryRaw<[{ count: number }]>`
           SELECT COUNT(DISTINCT "word_id") as count
           FROM "public"."user_learning_answers"
           WHERE "user_id" = ${user.user.id}
@@ -424,13 +493,13 @@ const userProcessRouter = createTRPCRouter({
         correctUnique = [{ _count: { _all: Number(uniqueWords[0].count) } }];
       } else {
         // For grammar
-        const totalResult = await prisma.$queryRaw<[{count: number}]>`
+        const totalResult = await prisma.$queryRaw<[{ count: number }]>`
           SELECT COUNT(*) as count FROM "public"."grammar_contents"
           WHERE "category_id" = ${input.categoryId}
         `;
         total = Number(totalResult[0].count);
 
-        const uniqueGrammars = await prisma.$queryRaw<[{count: number}]>`
+        const uniqueGrammars = await prisma.$queryRaw<[{ count: number }]>`
           SELECT COUNT(DISTINCT "grammar_id") as count
           FROM "public"."user_learning_answers"
           WHERE "user_id" = ${user.user.id}
@@ -441,7 +510,8 @@ const userProcessRouter = createTRPCRouter({
         correctUnique = [{ _count: { _all: Number(uniqueGrammars[0].count) } }];
       }
 
-      const correctCount = correctUnique.length > 0 ? correctUnique[0]._count._all : 0;
+      const correctCount =
+        correctUnique.length > 0 ? correctUnique[0]._count._all : 0;
       const percentage = total > 0 ? (correctCount / total) * 100 : 0;
 
       // Cập nhật tiến trình
@@ -465,7 +535,7 @@ const userProcessRouter = createTRPCRouter({
           // Tiếp tục dù có lỗi khi kiểm tra thành tích
         }
       }
-      
+
       // Trả về thông tin tiến độ học tập đã cập nhật
       return {
         progress: {
@@ -491,7 +561,7 @@ const userProcessRouter = createTRPCRouter({
       if (!user) {
         throw new Error("Unauthorized");
       }
-      
+
       // if user already registered, return
       const userCategory = await prisma.$queryRaw<any[]>`
         SELECT * FROM "public"."user_progress"
@@ -500,11 +570,11 @@ const userProcessRouter = createTRPCRouter({
         AND "content_type" = ${input.contentType}
         LIMIT 1
       `;
-      
+
       if (userCategory && userCategory.length > 0) {
         return;
       }
-      
+
       await prisma.$executeRaw`
         INSERT INTO "public"."user_progress"
         ("user_id", "category_id", "process_percentage", "content_type")

@@ -297,6 +297,7 @@ model UserGameCompletion {
   score      Int?      
   timeTaken  Int?      @map("time_taken")
   completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+  expEarned  Int?      @map("exp_earned")
   user       User      @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@index([userId])

@@ -14,7 +14,6 @@ import {
   Calendar,
   ChevronRight,
   Sparkles,
-  VolumeUp,
   Loader2,
   PlayCircle,
   Square,
@@ -22,10 +21,16 @@ import {
   BarChart3,
   FileText,
   ZoomIn,
-  Waveform,
   Volume,
   BadgeHelp,
+  Volume2,
+  Activity,
+  Settings,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
+// Replace unavailable icons with standard ones
+// Using Volume2 for VolumeUp, and Activity for Waveform
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -137,6 +142,10 @@ export default function PronunciationCheckGame() {
     averageScore: 0,
   });
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
+  const [useRealisticTranscription, setUseRealisticTranscription] =
+    useState<boolean>(true);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
 
   // Timer interval ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -169,22 +178,40 @@ export default function PronunciationCheckGame() {
   ];
 
   // Game data fetching
-  const { data: gameData, isLoading: isLoadingGameData } =
-    trpc.games.getPronunciationGame.useQuery(undefined, {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      onSuccess: (data) => {
-        if (data?.content) {
-          setPronunciationContents(data.content);
-        } else {
-          setPronunciationContents(sampleContents);
-        }
-        setIsLoading(false);
-      },
-      onError: () => {
+  const {
+    data: gameData,
+    isLoading: isLoadingGameData,
+    isError: isErrorGameData,
+  } = trpc.games.getPronunciationGame.useQuery(undefined, {
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 1, // Only retry once
+    onSuccess: (data) => {
+      if (data?.content) {
+        setPronunciationContents(data.content);
+      } else {
+        setPronunciationContents(sampleContents);
+      }
+      setIsLoading(false);
+    },
+    onError: () => {
+      console.log("Error fetching game data, using sample content");
+      setPronunciationContents(sampleContents);
+      setIsLoading(false);
+    },
+  });
+
+  // Force loading to end after 5 seconds even if API is still loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoading) {
+        console.log("Force ending loading state after timeout");
         setPronunciationContents(sampleContents);
         setIsLoading(false);
-      },
-    });
+      }
+    }, 5000); // 5 seconds timeout
+
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   // User stats fetching
   const { data: userStats } = trpc.userProcess.getGameStats.useQuery(
@@ -255,33 +282,45 @@ export default function PronunciationCheckGame() {
     };
   }, []);
 
+  // Fix for the "Maximum update depth exceeded" error
   useEffect(() => {
+    // Only update performance history when currentFeedback changes
     if (currentFeedback) {
-      const newHistory = [...userPerformanceHistory, currentFeedback.overall];
-      setUserPerformanceHistory(newHistory);
+      // Use functional update to avoid dependency on userPerformanceHistory
+      setUserPerformanceHistory((prevHistory) => {
+        const newHistory = [...prevHistory, currentFeedback.overall];
 
-      if (newHistory.length >= 3) {
-        const recentAverage =
-          newHistory.slice(-3).reduce((a, b) => a + b, 0) / 3;
+        // Check for difficulty adjustment but don't update in this effect
+        if (newHistory.length >= 3) {
+          const recentAverage =
+            newHistory.slice(-3).reduce((a, b) => a + b, 0) / 3;
 
-        if (recentAverage > 85 && difficultyLevel < 3) {
-          setDifficultyLevel((prev) => prev + 1);
-          toast({
-            title: "Level Up!",
-            description: "You've advanced to a more challenging level!",
-            variant: "success",
-          });
-        } else if (recentAverage < 60 && difficultyLevel > 1) {
-          setDifficultyLevel((prev) => prev - 1);
-          toast({
-            title: "Adjusting Difficulty",
-            description: "We've adjusted the difficulty to help you improve.",
-            variant: "info",
-          });
+          // Schedule difficulty adjustment for next render cycle
+          setTimeout(() => {
+            if (recentAverage > 85 && difficultyLevel < 3) {
+              setDifficultyLevel((prev) => prev + 1);
+              toast({
+                title: "Level Up!",
+                description: "You've advanced to a more challenging level!",
+                variant: "success",
+              });
+            } else if (recentAverage < 60 && difficultyLevel > 1) {
+              setDifficultyLevel((prev) => prev - 1);
+              toast({
+                title: "Adjusting Difficulty",
+                description:
+                  "We've adjusted the difficulty to help you improve.",
+                variant: "info",
+              });
+            }
+          }, 0);
         }
-      }
+
+        return newHistory;
+      });
     }
-  }, [currentFeedback, userPerformanceHistory, difficultyLevel, toast]);
+    // Only depend on currentFeedback, not on derived state
+  }, [currentFeedback, toast]);
 
   useEffect(() => {
     if (isRedirecting && redirectCountdown > 0) {
@@ -294,6 +333,26 @@ export default function PronunciationCheckGame() {
       router.push("/games");
     }
   }, [isRedirecting, redirectCountdown, router]);
+
+  // Toggle realistic transcription and update the service config
+  const toggleRealisticTranscription = () => {
+    setUseRealisticTranscription(!useRealisticTranscription);
+    pronunciationService.setRealisticTranscription(!useRealisticTranscription);
+    toast({
+      title: !useRealisticTranscription
+        ? "Phiên âm thực tế đã bật"
+        : "Phiên âm thực tế đã tắt",
+      description: !useRealisticTranscription
+        ? "Hệ thống sẽ mô phỏng việc nhận dạng giọng nói thực tế với các lỗi ngắt quãng tự nhiên"
+        : "Hệ thống sẽ sử dụng phương pháp nhận dạng giọng nói tiêu chuẩn",
+      variant: "default",
+    });
+  };
+
+  // Initialize realistic transcription mode on component mount
+  useEffect(() => {
+    pronunciationService.setRealisticTranscription(useRealisticTranscription);
+  }, []);
 
   const preprocessAudio = async (audioBlob: Blob): Promise<Blob> => {
     if (!audioContext) return audioBlob;
@@ -416,7 +475,7 @@ export default function PronunciationCheckGame() {
       audioRef.current.play();
     } else {
       const utterance = new SpeechSynthesisUtterance(content.content);
-      utterance.lang = "en-US";
+      utterance.lang = selectedLanguage === "vi" ? "vi-VN" : "en-US";
       utterance.rate = 0.9;
       speechSynthesis.speak(utterance);
     }
@@ -507,7 +566,9 @@ export default function PronunciationCheckGame() {
       const processedAudioBlob = await preprocessAudio(audioBlob);
 
       const result = await pronunciationService.transcribeAudio(
-        processedAudioBlob
+        processedAudioBlob,
+        currentContent.content,
+        selectedLanguage
       );
       setTranscriptionResult(result);
     } catch (error) {
@@ -529,22 +590,59 @@ export default function PronunciationCheckGame() {
 
     try {
       const processedAudioBlob = await preprocessAudio(audioBlob);
-
+      const currentContent = pronunciationContents[currentContentIndex];
       let transcribedText = transcriptionResult?.transcript;
 
+      // Chỉ transcribe nếu chưa có kết quả từ trước
       if (!transcribedText) {
         setIsTranscribing(true);
         const transcription = await pronunciationService.transcribeAudio(
-          processedAudioBlob
+          processedAudioBlob,
+          "", // Bỏ tham số reference text để tránh việc sử dụng nó làm fallback
+          selectedLanguage
         );
+
         setTranscriptionResult(transcription);
         transcribedText = transcription.transcript;
+
+        // Kiểm tra xem có phải kết quả từ fallback không
+        if (
+          transcription.source?.includes("reference") ||
+          transcription.source?.includes("fallback")
+        ) {
+          toast({
+            title: "Không thể nhận dạng giọng nói",
+            description:
+              "Không thể nhận dạng giọng nói của bạn. Vui lòng thử lại với giọng nói rõ ràng hơn.",
+            variant: "warning",
+          });
+          setIsTranscribing(false);
+          setIsProcessing(false);
+          return;
+        }
+
         setIsTranscribing(false);
       }
 
-      const currentContent = pronunciationContents[currentContentIndex];
+      // Nếu không phát hiện được giọng nói hoặc transcript rỗng
+      if (!transcribedText || transcribedText.trim().length === 0) {
+        toast({
+          title: "Không có giọng nói",
+          description:
+            "Không thể nhận dạng bất kỳ giọng nói nào. Vui lòng nói rõ hơn và thử lại.",
+          variant: "warning",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      console.log(
+        "Đang đánh giá phát âm với văn bản nhận dạng:",
+        transcribedText
+      );
+
       const textToEvaluate = currentContent.content;
-      const cacheKey = `${textToEvaluate}_${transcribedText}_${difficultyLevel}`;
+      const cacheKey = `${textToEvaluate}_${transcribedText}_${difficultyLevel}_${selectedLanguage}`;
 
       let feedback: PronunciationFeedback | null = null;
 
@@ -560,7 +658,8 @@ export default function PronunciationCheckGame() {
             feedback = await pronunciationService.evaluatePronunciation(
               processedAudioBlob,
               textToEvaluate,
-              transcribedText
+              transcribedText,
+              selectedLanguage
             );
 
             pronunciationCache.set(cacheKey, feedback);
@@ -578,6 +677,9 @@ export default function PronunciationCheckGame() {
           "Failed to get pronunciation feedback after multiple retries"
         );
       }
+
+      // Cập nhật transcribedText trong feedback
+      feedback.transcribedText = transcribedText;
 
       setCurrentFeedback(feedback);
       setFeedbacks([...feedbacks, feedback]);
@@ -716,13 +818,104 @@ export default function PronunciationCheckGame() {
     return phonetic;
   };
 
+  const renderWordComparison = () => {
+    if (!currentFeedback || !transcriptionResult) {
+      return (
+        <div className="text-gray-500 italic">
+          Text comparison not available
+        </div>
+      );
+    }
+
+    const originalWords = currentContent.content.split(/\s+/);
+    const transcribedWords = transcriptionResult.transcript?.split(/\s+/) || [];
+
+    return (
+      <div className="p-2 bg-white rounded-lg">
+        <div className="mb-3">
+          <h4 className="text-sm font-medium">Original Text:</h4>
+          <p className="p-2 bg-gray-50 rounded border border-gray-100">
+            {originalWords.map((word, index) => (
+              <span
+                key={`orig-${index}`}
+                className="inline-block bg-green-100 text-green-800 rounded px-1 py-0.5 m-0.5"
+              >
+                {word}
+              </span>
+            ))}
+          </p>
+        </div>
+
+        <div>
+          <h4 className="text-sm font-medium">Your Speech:</h4>
+          <p className="p-2 bg-gray-50 rounded border border-gray-100">
+            {transcribedWords.length === 0 ? (
+              <span className="text-gray-500 italic">No speech detected</span>
+            ) : (
+              transcribedWords.map((word, index) => {
+                const isInOriginal = originalWords.some(
+                  (w) => w.toLowerCase() === word.toLowerCase()
+                );
+                return (
+                  <span
+                    key={`trans-${index}`}
+                    className={`inline-block rounded px-1 py-0.5 m-0.5 ${
+                      isInOriginal
+                        ? "bg-green-100 text-green-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {word}
+                  </span>
+                );
+              })
+            )}
+          </p>
+        </div>
+
+        {originalWords.some(
+          (word) =>
+            !transcribedWords.some(
+              (w) => w.toLowerCase() === word.toLowerCase()
+            )
+        ) && (
+          <div className="mt-3">
+            <h4 className="text-sm font-medium">Missing Words:</h4>
+            <p className="p-2 bg-gray-50 rounded border border-gray-100">
+              {originalWords
+                .filter(
+                  (word) =>
+                    !transcribedWords.some(
+                      (w) => w.toLowerCase() === word.toLowerCase()
+                    )
+                )
+                .map((word, index) => (
+                  <span
+                    key={`miss-${index}`}
+                    className="inline-block bg-red-100 text-red-800 rounded px-1 py-0.5 m-0.5"
+                  >
+                    {word}
+                  </span>
+                ))}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const resetGame = () => {
+    resetStates();
+    setAttemptsLeft(3);
+  };
+
   const renderWaveform = () => {
     if (!showWaveform || audioFrequencyData.length === 0) return null;
 
     return (
       <div className="mt-4">
         <h4 className="text-sm font-medium mb-2 flex items-center">
-          <Waveform className="h-4 w-4 mr-2 text-game-primary" />
+          <Activity className="h-4 w-4 mr-2 text-game-primary" />
           Audio Waveform
         </h4>
         <div className="relative h-24 bg-gray-50 rounded-lg overflow-hidden p-2 border border-gray-200">
@@ -783,7 +976,8 @@ export default function PronunciationCheckGame() {
                     const utterance = new SpeechSynthesisUtterance(
                       analysis.word
                     );
-                    utterance.lang = "en-US";
+                    utterance.lang =
+                      selectedLanguage === "vi" ? "vi-VN" : "en-US";
                     utterance.rate = 0.8;
                     speechSynthesis.speak(utterance);
                   }}
@@ -937,9 +1131,19 @@ export default function PronunciationCheckGame() {
               >
                 Level {difficultyLevel}
               </Badge>
+              {/* Settings button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-4 text-game-accent/70 hover:text-game-accent hover:bg-white/50"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                <Settings className="h-5 w-5" />
+              </Button>
             </p>
           </motion.div>
 
+          {/* Right side - Attempts indicator */}
           <motion.div
             className="flex items-center gap-4 mt-4 md:mt-0"
             variants={itemVariants}
@@ -976,6 +1180,65 @@ export default function PronunciationCheckGame() {
           </motion.div>
         </motion.div>
 
+        {/* Settings panel (collapsible) */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6 overflow-hidden"
+            >
+              <Card className="border-dashed border-game-primary/30 bg-white/80">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-lg flex items-center">
+                    <Settings className="mr-2 h-5 w-5 text-game-primary" />
+                    Cài đặt nhận dạng giọng nói
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 py-2">
+                  <div className="flex items-center justify-between bg-game-primary/5 p-3 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-game-accent">
+                        Phiên âm thực tế
+                      </h3>
+                      <p className="text-sm text-game-accent/70 max-w-lg">
+                        Khi bật, hệ thống sẽ mô phỏng việc nhận dạng giọng nói
+                        thực tế với các lỗi và ngắt quãng tự nhiên như trong các
+                        hệ thống thực tế. Điều này giúp bạn tập làm quen với
+                        việc đọc, lỗi ngắt quãng, lặp từ, và các lỗi phổ biến.
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      className={`p-0 h-12 w-12 ${
+                        useRealisticTranscription
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      }`}
+                      onClick={toggleRealisticTranscription}
+                    >
+                      {useRealisticTranscription ? (
+                        <ToggleRight className="h-12 w-12" />
+                      ) : (
+                        <ToggleLeft className="h-12 w-12" />
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+                <CardFooter className="pt-0">
+                  <p className="text-xs text-game-accent/60 italic">
+                    Thiết lập này giúp phần mềm nhận dạng giống với giọng nói
+                    thực tế. Nếu bạn gặp vấn đề với việc nhận dạng, hãy thử tắt
+                    tính năng này.
+                  </p>
+                </CardFooter>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="grid gap-6 md:grid-cols-3">
           {/* Game area */}
           <motion.div
@@ -997,13 +1260,24 @@ export default function PronunciationCheckGame() {
                         : "Read this paragraph with clarity and fluency"}
                     </CardDescription>
                   </div>
-                  <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-none">
-                    {currentContent.type === "word"
-                      ? "Word"
-                      : currentContent.type === "sentence"
-                      ? "Sentence"
-                      : "Paragraph"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="text-sm bg-blue-50 text-blue-700 rounded-md px-2 py-1 border border-blue-100"
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                    >
+                      <option value="en">English</option>
+                      <option value="vi">Tiếng Việt</option>
+                      <option value="auto">Auto-detect</option>
+                    </select>
+                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-none">
+                      {currentContent.type === "word"
+                        ? "Word"
+                        : currentContent.type === "sentence"
+                        ? "Sentence"
+                        : "Paragraph"}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
 
@@ -1031,7 +1305,7 @@ export default function PronunciationCheckGame() {
                       className="rounded-full border-blue-200 text-blue-700 hover:bg-blue-100"
                       onClick={playOriginalAudio}
                     >
-                      <VolumeUp className="mr-2 h-4 w-4" />
+                      <Volume2 className="mr-2 h-4 w-4" />
                       Listen to correct pronunciation
                     </Button>
                   </motion.div>
@@ -1682,13 +1956,15 @@ export default function PronunciationCheckGame() {
                   {/* Audio processing info */}
                   <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
                     <h3 className="text-sm font-medium mb-2 flex items-center text-blue-700">
-                      <Waveform className="h-4 w-4 mr-2" />
-                      Audio Enhancement
+                      <Activity className="h-4 w-4 mr-2" />
+                      Multi-language Support
                     </h3>
                     <p className="text-sm text-blue-700/80">
-                      Your recordings are automatically enhanced with noise
-                      reduction to improve transcription accuracy and evaluation
-                      quality.
+                      {selectedLanguage === "vi"
+                        ? "Bạn đang sử dụng chế độ tiếng Việt. Hệ thống sẽ nhận dạng và đánh giá phát âm tiếng Việt."
+                        : selectedLanguage === "auto"
+                        ? "Auto-detect mode will try to recognize the language you're speaking."
+                        : "English mode is selected. The system will evaluate English pronunciation."}
                     </p>
                   </div>
 

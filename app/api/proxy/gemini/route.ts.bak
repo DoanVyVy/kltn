@@ -1,0 +1,65 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(request: NextRequest) {
+  try {
+    // Parse the request body
+    const requestData = await request.json();
+
+    // Get the Gemini API key from environment variables
+    const apiKey =
+      process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Missing Gemini API key" },
+        { status: 500 }
+      );
+    }
+
+    // Construct the Gemini API endpoint URL
+    const endpoint =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
+    const url = `${endpoint}?key=${apiKey}`;
+
+    // Forward the request to the Gemini API
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestData),
+    });
+
+    if (!response.ok) {
+      console.error(
+        `Gemini API responded with ${response.status} ${response.statusText}`
+      );
+      // Try to get error details
+      const errorData = await response.text();
+      console.error("Error response:", errorData);
+      return NextResponse.json(
+        {
+          error: `Gemini API request failed with status ${response.status}`,
+          details: errorData,
+        },
+        { status: response.status }
+      );
+    }
+
+    // Get the response data
+    const responseData = await response.json();
+    console.log(
+      "Gemini API response:",
+      JSON.stringify(responseData).substring(0, 200) + "..."
+    );
+
+    // Return the response from the Gemini API
+    return NextResponse.json(responseData);
+  } catch (error) {
+    console.error("Error in Gemini proxy:", error);
+    return NextResponse.json(
+      { error: "Failed to process the request", message: error.message },
+      { status: 500 }
+    );
+  }
+}
