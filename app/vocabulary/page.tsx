@@ -299,7 +299,9 @@ export default function VocabularyPage() {
     () =>
       learningCourses.filter(
         (progress) =>
-          progress.category?.totalWords! > 0 && progress.processPercentage > 0
+          progress.processPercentage > 0 &&
+          progress.category !== null &&
+          progress.category.isVocabularyCourse === true
       ),
     [learningCourses]
   );

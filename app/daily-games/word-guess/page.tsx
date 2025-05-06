@@ -21,6 +21,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Navigation from "@/components/navigation"
+import { useToast } from "@/hooks/use-toast"
+import { trpc } from "@/trpc/client"
 
 // Types
 interface Guess {
@@ -32,6 +34,12 @@ interface Guess {
 interface Clue {
   text: string
   revealed: boolean
+}
+
+interface GameData {
+  id: number
+  word: string
+  clues: string[]
 }
 
 // Animation variants
@@ -69,37 +77,127 @@ const letterVariants = {
 
 export default function WordGuessGame() {
   const router = useRouter()
-  const [targetWord] = useState("VOCABULARY")
+  const { toast } = useToast()
+  
+  // State for game data from API
+  const [gameData, setGameData] = useState<GameData | null>(null)
+  const [targetWord, setTargetWord] = useState("")
   const [guesses, setGuesses] = useState<Guess[]>([])
   const [currentGuess, setCurrentGuess] = useState("")
   const [gameOver, setGameOver] = useState(false)
   const [gameWon, setGameWon] = useState(false)
   const [attemptsLeft, setAttemptsLeft] = useState(6)
   const [message, setMessage] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  // Update the initial clues state to ensure only the first clue is revealed
-  const [clues, setClues] = useState<Clue[]>([
-    { text: "This word refers to all the words known and used by a person", revealed: true },
-    { text: "It starts with the letter V", revealed: false },
-    { text: "It has 10 letters", revealed: false },
-    { text: "It's related to language learning", revealed: false },
-    { text: "It ends with the letters 'ARY'", revealed: false },
-  ])
+  const [isLoading, setIsLoading] = useState(true)
+  const [clues, setClues] = useState<Clue[]>([])
   const [redirectCountdown, setRedirectCountdown] = useState(3)
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [gameStats, setGameStats] = useState({
+    wordsGuessed: 0,
+    streak: 0,
+  })
+  
+  // Game data fetching
+  const { data: dailyWordData, isLoading: isLoadingGameData } = trpc.games.getDailyGame.useQuery(
+    { type: "word-guess" },
+    {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      onSuccess: (data) => {
+        if (data?.game) {
+          const game = data.game;
+          setGameData(game);
+          
+          if (game.words && game.words.length > 0) {
+            // Get a random word from the word list or today's daily word if implemented
+            const word = game.words[Math.floor(Math.random() * game.words.length)].toUpperCase();
+            setTargetWord(word);
+            
+            // Initialize clues based on the word
+            const defaultClues = [
+              `This word has ${word.length} letters`,
+              `It starts with the letter ${word[0]}`,
+              `It ends with the letter ${word[word.length - 1]}`,
+              `It contains the letter ${word[Math.floor(word.length / 2)]}`,
+            ];
+            
+            // Use clues from the game data if available, otherwise use default clues
+            const clueTexts = game.clues && game.clues.length > 0 ? game.clues : defaultClues;
+            
+            // Initialize clues with only the first one revealed
+            setClues(
+              clueTexts.map((clue, index) => ({
+                text: clue,
+                revealed: index === 0,
+              }))
+            );
+          }
+        }
+        setIsLoading(false);
+      },
+      onError: () => {
+        // Fallback to default word if API fails
+        const fallbackWord = "VOCABULARY";
+        setTargetWord(fallbackWord);
+        setClues([
+          { text: "This word refers to all the words known and used by a person", revealed: true },
+          { text: "It starts with the letter V", revealed: false },
+          { text: "It has 10 letters", revealed: false },
+          { text: "It's related to language learning", revealed: false },
+          { text: "It ends with the letters 'ARY'", revealed: false },
+        ]);
+        setIsLoading(false);
+      }
+    }
+  );
+
+  // User stats fetching
+  const { data: userStats } = trpc.userProcess.getGameStats.useQuery(
+    undefined,
+    {
+      onSuccess: (data) => {
+        if (data) {
+          setGameStats({
+            wordsGuessed: data.wordsGuessed || 0,
+            streak: data.streak || 0,
+          });
+        }
+      }
+    }
+  );
+
+  // Mutation to add experience when winning
+  const addExperienceMutation = trpc.userProcess.addExperience.useMutation({
+    onSuccess: (data) => {
+      toast({
+        title: "Experience gained!",
+        description: `You earned 50 XP for completing the daily word game!`,
+        variant: "success"
+      });
+    },
+    onError: (error) => {
+      console.error("Error adding experience:", error);
+    }
+  });
+
+  // Track game completion in user stats
+  const completeGameMutation = trpc.userProcess.completeGame.useMutation({
+    onSuccess: (data) => {
+      if (data?.wordsGuessed !== undefined) {
+        setGameStats({
+          wordsGuessed: data.wordsGuessed,
+          streak: data.streak || gameStats.streak,
+        });
+      }
+    }
+  });
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1800)
+    // Simulate loading if still fetching data
+    if (!isLoadingGameData && targetWord) {
+      setIsLoading(false);
+    }
+  }, [isLoadingGameData, targetWord]);
 
-    return () => clearTimeout(timer)
-  }, [])
-
-  // Fix the clue reveal logic to only show one new clue at a time after an incorrect guess
-
-  // Replace the current useEffect for revealing clues with this corrected version:
   // Reveal a new clue after each incorrect guess
   useEffect(() => {
     const revealNextClue = () => {
@@ -115,7 +213,7 @@ export default function WordGuessGame() {
     if (guesses.length > 0 && !guesses[guesses.length - 1].correct) {
       revealNextClue()
     }
-  }, [guesses])
+  }, [guesses, clues])
 
   // Handle automatic redirection after winning
   useEffect(() => {
@@ -131,9 +229,8 @@ export default function WordGuessGame() {
     }
   }, [isRedirecting, redirectCountdown, router])
 
-  // Update the handleGuess function to ensure it doesn't interfere with the clue reveal logic
   const handleGuess = () => {
-    if (!currentGuess) return
+    if (!currentGuess || !targetWord) return
 
     const formattedGuess = currentGuess.trim().toUpperCase()
 
@@ -162,6 +259,10 @@ export default function WordGuessGame() {
       setGameWon(true)
       setGameOver(true)
       setMessage("Congratulations! You found the word!")
+      
+      // Award 50 XP and update game completion stats
+      addExperienceMutation.mutate({ amount: 50, source: "daily_game" });
+      completeGameMutation.mutate({ gameType: "word-guess" });
 
       // Start the redirect countdown after a short delay
       setTimeout(() => {
@@ -178,21 +279,33 @@ export default function WordGuessGame() {
     }
   }
 
-  // Also update the resetGame function to ensure only the first clue is revealed when resetting:
   const resetGame = () => {
-    // Reset the game state
+    // Reset the game state but keep the same word
     setGuesses([])
     setCurrentGuess("")
     setGameOver(false)
     setGameWon(false)
     setAttemptsLeft(6)
     setMessage(null)
+    
+    // Keep the same clues but reset revelations
     setClues(
       clues.map((clue, index) => ({
         ...clue,
         revealed: index === 0, // Only reveal the first clue
-      })),
+      }))
     )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-game-background to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-game-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-game-accent">Loading today's word challenge...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -360,7 +473,12 @@ export default function WordGuessGame() {
                               : "bg-blue-50 border-blue-200 text-blue-700"
                         } rounded-xl`}
                       >
-                        <AlertDescription>{message}</AlertDescription>
+                        <AlertDescription>
+                          {message}
+                          {gameWon && (
+                            <span className="ml-2 font-semibold">+50 XP</span>
+                          )}
+                        </AlertDescription>
                       </Alert>
                     </motion.div>
                   )}
@@ -506,7 +624,7 @@ export default function WordGuessGame() {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
                       >
-                        12
+                        {gameStats.wordsGuessed}
                       </motion.div>
                       <div className="text-sm text-game-accent/70">Words Guessed</div>
                     </motion.div>
@@ -520,11 +638,27 @@ export default function WordGuessGame() {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", stiffness: 200, delay: 0.3 }}
                       >
-                        5
+                        {gameStats.streak}
                       </motion.div>
                       <div className="text-sm text-game-accent/70">Day Streak</div>
                     </motion.div>
                   </div>
+                  
+                  {/* Experience reward highlight */}
+                  <motion.div
+                    className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    <h3 className="font-medium text-amber-700 flex items-center justify-center">
+                      <Sparkles className="h-4 w-4 mr-1" />
+                      Reward
+                    </h3>
+                    <p className="text-sm text-amber-600">
+                      Complete this challenge for <span className="font-bold">50 XP</span>
+                    </p>
+                  </motion.div>
 
                   <div className="pt-2">
                     <h3 className="text-sm font-medium mb-2">How to Play</h3>

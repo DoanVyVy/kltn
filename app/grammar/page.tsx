@@ -10,6 +10,7 @@ import {
   Eye,
   BookOpenCheck,
   GraduationCap,
+  PenTool,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,8 @@ const LearningGrammarCourseCard = ({
   onPreview: (course: Course) => void;
   onStartLearning: (courseId: number) => void;
 }) => {
+  const router = useRouter();
+
   if (!progress.category) return null;
 
   return (
@@ -129,7 +132,7 @@ const LearningGrammarCourseCard = ({
               : "Chưa học"}
           </div>
         </CardContent>
-        <CardFooter className="grid grid-cols-2 gap-2">
+        <CardFooter className="grid grid-cols-3 gap-2">
           <Button
             className="w-full"
             variant="outline"
@@ -151,6 +154,17 @@ const LearningGrammarCourseCard = ({
             }}
           >
             Học tiếp
+          </Button>
+          <Button
+            className="w-full bg-teal-500 text-white hover:bg-teal-600"
+            onClick={() => {
+              if (progress.categoryId) {
+                router.push(`/grammar/practice/${progress.categoryId}`);
+              }
+            }}
+          >
+            <PenTool className="mr-2 h-4 w-4" />
+            Luyện tập
           </Button>
         </CardFooter>
       </Card>
@@ -350,7 +364,10 @@ export default function GrammarPage() {
   const learningGrammarCourses = useMemo(
     () =>
       learningCourses.filter(
-        (progress) => progress.category?.totalGrammar! > 0
+        (progress) => 
+          progress.processPercentage > 0 && 
+          progress.category !== null && 
+          progress.category?.isVocabularyCourse === false
       ),
     [learningCourses]
   );
@@ -613,7 +630,7 @@ export default function GrammarPage() {
                   </div>
                 </div>
                 {learningGrammarCourses.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <Button
                       className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
                       onClick={handleContinueLatestCourse}
@@ -625,6 +642,17 @@ export default function GrammarPage() {
                       onClick={() => router.push("/grammar/quiz")}
                     >
                       Trò chơi
+                    </Button>
+                    <Button
+                      className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700"
+                      onClick={() => {
+                        if (learningGrammarCourses.length > 0 && learningGrammarCourses[0].categoryId) {
+                          router.push(`/grammar/practice/${learningGrammarCourses[0].categoryId}`);
+                        }
+                      }}
+                    >
+                      <PenTool className="mr-1 h-4 w-4" />
+                      Luyện tập
                     </Button>
                   </div>
                 ) : (

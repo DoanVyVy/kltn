@@ -2,13 +2,15 @@
 
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, FileUp } from "lucide-react";
 import GrammarTable from "./GrammarTable";
 import GrammarFilters from "./GrammarFilters";
 import AddGrammarDialog from "./AddGrammarDialog";
 import EditGrammarDialog from "./EditGrammarDialog";
 import DeleteGrammarDialog from "./DeleteGrammarDialog";
+import ImportGrammarDialog from "./ImportGrammarDialog";
 import useGrammar from "./hooks/useGrammar";
+import { useState } from "react";
 
 export default function GrammarManagement() {
   const {
@@ -29,16 +31,37 @@ export default function GrammarManagement() {
     isOpenDeleteDialog,
     isOpenAddDialog,
     setCurrentDialog,
+    refetchGrammar,
   } = useGrammar();
+
+  // State for import dialog
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+
+  // Handler for import success
+  const handleImportSuccess = () => {
+    refetchGrammar();
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Quản lý ngữ pháp</h2>
-        <Button className="game-button" onClick={() => setCurrentDialog("add")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Thêm ngữ pháp mới
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            className="flex items-center gap-2 game-button"
+            onClick={() => setIsImportDialogOpen(true)}
+          >
+            <FileUp size={16} />
+            Import
+          </Button>
+          <Button
+            className="game-button"
+            onClick={() => setCurrentDialog("add")}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Thêm ngữ pháp mới
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -106,6 +129,14 @@ export default function GrammarManagement() {
           />
         </>
       )}
+
+      {/* Import Dialog */}
+      <ImportGrammarDialog
+        isOpen={isImportDialogOpen}
+        setIsOpen={setIsImportDialogOpen}
+        categories={categories || []}
+        onImportSuccess={handleImportSuccess}
+      />
     </div>
   );
 }

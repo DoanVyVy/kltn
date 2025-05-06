@@ -122,12 +122,12 @@ export default function DashboardPage() {
           };
           setUserProfile(profile);
           setUserStats({
-            learningStreak: 0,
+            learningStreak: 1,
             dailyXpGoal: 100,
-            currentXp: 0,
-            totalWords: 0,
-            totalGrammarRules: 0,
-            availableGames: 5,
+            currentXp: 5,
+            totalWords: 4,
+            totalGrammarRules: 1,
+            availableGames: 4,
           });
         }
 

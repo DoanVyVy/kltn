@@ -80,12 +80,100 @@ const userProcessRouter = createTRPCRouter({
         },
       });
 
+      // Check if this is first time learning this word/grammar correctly
+      let isFirstTimeCorrect = false;
+      if (input.correct) {
+        let previousCorrectAnswers;
+        if (input.wordId) {
+          previousCorrectAnswers = await prisma.userLearningAnswer.findFirst({
+            where: {
+              userId: user.user.id,
+              wordId: input.wordId,
+              isCorrect: true,
+              createdAt: { lt: new Date() }
+            }
+          });
+        } else if (input.grammarId) {
+          previousCorrectAnswers = await prisma.userLearningAnswer.findFirst({
+            where: {
+              userId: user.user.id,
+              grammarId: input.grammarId,
+              isCorrect: true,
+              createdAt: { lt: new Date() }
+            }
+          });
+        }
+        
+        isFirstTimeCorrect = !previousCorrectAnswers;
+      }
+
+      // Award EXP points based on the answer and item type
+      const expPoints = input.correct 
+        ? (isFirstTimeCorrect ? 10 : 5) // 10 points for first correct answer, 5 for repeated correct answers
+        : 0; // No points for incorrect answers
+
+      if (expPoints > 0) {
+        // Update user total points
+        await prisma.user.update({
+          where: { email: user.user.email },
+          data: {
+            totalPoints: { increment: expPoints },
+            lastActiveDate: new Date(),
+          },
+        });
+
+        // Update leaderboard scores
+        try {
+          await prisma.$transaction(async (prisma) => {
+            const activeLeaderboards = await prisma.leaderboard.findMany({
+              where: {
+                startDate: { lte: new Date() },
+                OR: [
+                  { endDate: null },
+                  { endDate: { gte: new Date() } }
+                ]
+              }
+            });
+
+            for (const leaderboard of activeLeaderboards) {
+              const existingEntry = await prisma.leaderboardEntry.findFirst({
+                where: {
+                  leaderboardId: leaderboard.leaderboardId,
+                  userId: user.user.id
+                }
+              });
+
+              if (existingEntry) {
+                await prisma.leaderboardEntry.update({
+                  where: { entryId: existingEntry.entryId },
+                  data: {
+                    score: { increment: expPoints },
+                    updatedAt: new Date()
+                  }
+                });
+              } else {
+                await prisma.leaderboardEntry.create({
+                  data: {
+                    leaderboardId: leaderboard.leaderboardId,
+                    userId: user.user.id,
+                    score: expPoints,
+                    updatedAt: new Date()
+                  }
+                });
+              }
+            }
+          });
+        } catch (error) {
+          console.error("Error updating leaderboard scores:", error);
+          // Continue anyway even if leaderboard update fails
+        }
+      }
+
       // recalculate progress
       let total;
       let correctUnique: UserLearningAnswerGroupByOutputItem[];
 
       if (input.wordId) {
-        // For vocabulary
         total = await prisma.vocabularyWord.count({
           where: {
             categoryId: input.categoryId,
