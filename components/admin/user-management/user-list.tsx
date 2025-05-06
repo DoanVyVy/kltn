@@ -4,16 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Search, UserPlus } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -23,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Pagination } from "@/components/pagination"; // Sửa import
+import { Pagination } from "@/components/pagination";
 import { trpc } from "@/trpc/client";
 import {
   Dialog,
@@ -34,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import AdminDataTable, { ColumnDef } from "@/components/admin/AdminDataTable";
 
 interface UserListProps {
   onSelectUser: (userId: string) => void;
@@ -45,15 +38,13 @@ export default function UserList({
   selectedUserId,
 }: UserListProps) {
   const { toast } = useToast();
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<string | null>(null);
-  const itemsPerPage = 10;
-
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string>("");
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -62,11 +53,13 @@ export default function UserList({
     role: "user",
   });
 
-  // Sử dụng trpc để lấy danh sách người dùng
+  const itemsPerPage = 10;
+
+  // Fetch users with pagination and filtering
   const {
     data: usersData,
-    refetch,
     isLoading,
+    refetch,
   } = trpc.user.getAllUsers.useQuery(
     {
       page: currentPage,
@@ -164,6 +157,54 @@ export default function UserList({
     }).format(date);
   };
 
+  const columns: ColumnDef[] = [
+    {
+      header: "Người dùng",
+      cell: (row) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={row.avatarUrl || ""} alt={row.username} />
+            <AvatarFallback className="bg-gray-100 text-gray-600">
+              {row.username?.charAt(0).toUpperCase() || "U"}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="font-medium">{row.fullName || row.username}</div>
+            <div className="text-xs text-muted-foreground">@{row.username}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: "Email",
+      accessorKey: "email",
+    },
+    {
+      header: "Vai trò",
+      cell: (row) => (
+        <Badge
+          variant={
+            row.role === "admin"
+              ? "default"
+              : row.role === "moderator"
+              ? "secondary"
+              : "outline"
+          }
+        >
+          {row.role === "admin"
+            ? "Quản trị viên"
+            : row.role === "moderator"
+            ? "Người kiểm duyệt"
+            : "Người dùng"}
+        </Badge>
+      ),
+    },
+    {
+      header: "Hoạt động cuối",
+      cell: (row) => formatDate(row.lastActiveDate),
+    },
+  ];
+
   return (
     <>
       <Card>
@@ -213,113 +254,15 @@ export default function UserList({
             </div>
           </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Người dùng</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Vai trò</TableHead>
-                  <TableHead>Hoạt động cuối</TableHead>
-                  <TableHead className="text-right">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10">
-                      Đang tải...
-                    </TableCell>
-                  </TableRow>
-                ) : usersData?.items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10">
-                      Không có dữ liệu người dùng
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  usersData?.items.map((user) => (
-                    <TableRow
-                      key={user.userId}
-                      className={
-                        selectedUserId === user.userId
-                          ? "bg-muted/50"
-                          : undefined
-                      }
-                      onClick={() => onSelectUser(user.userId)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage
-                              src={user.avatarUrl || "/placeholder-user.jpg"}
-                              alt={user.username}
-                            />
-                            <AvatarFallback>
-                              {user.fullName
-                                ? user.fullName.charAt(0)
-                                : user.username.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">
-                              {user.fullName || user.username}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              @{user.username}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            user.role === "admin"
-                              ? "default"
-                              : user.role === "moderator"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {user.role === "admin"
-                            ? "Quản trị viên"
-                            : user.role === "moderator"
-                            ? "Người kiểm duyệt"
-                            : "Người dùng"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{formatDate(user.lastActiveDate)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectUser(user.userId);
-                            }}
-                          >
-                            <Pencil size={16} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteDialog(user.userId);
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <AdminDataTable
+            columns={columns}
+            data={usersData?.items || []}
+            isLoading={isLoading}
+            onEdit={(user) => onSelectUser(user.userId)}
+            onDelete={(user) => openDeleteDialog(user.userId)}
+            keyField="userId"
+            emptyMessage="Không có người dùng nào"
+          />
 
           {usersData && (
             <Pagination

@@ -1,14 +1,6 @@
-import {
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableHead,
-  Table,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Edit, Trash } from "lucide-react";
 import { GrammarContentListElement } from "@/routers/grammar_content.route";
+import AdminDataTable, { ColumnDef } from "@/components/admin/AdminDataTable";
+import { Badge } from "@/components/ui/badge";
 
 interface GrammarTableProps {
   data: GrammarContentListElement[] | undefined;
@@ -23,74 +15,66 @@ export default function GrammarTable({
   onEdit,
   onDelete,
 }: GrammarTableProps) {
-  console.log("Table Data:", data);
-  console.log("Table Loading:", isLoading);
-
-  // Hiển thị trạng thái loading
-  if (isLoading) {
-    return (
-      <div className="flex h-[200px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-game-primary border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  // Hiển thị khi không có dữ liệu
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex h-[200px] flex-col items-center justify-center gap-2 text-center">
-        <p className="text-lg font-medium">Không có nội dung ngữ pháp nào</p>
-        <p className="text-sm text-muted-foreground">
-          Thêm nội dung mới bằng cách nhấn nút Thêm mới ở trên.
-        </p>
-      </div>
-    );
-  }
+  const columns: ColumnDef[] = [
+    {
+      header: "ID",
+      accessorKey: "contentId",
+      className: "w-[50px]"
+    },
+    {
+      header: "Tiêu đề",
+      accessorKey: "title",
+      className: "w-[200px]"
+    },
+    {
+      header: "Khóa học",
+      cell: (row) => (
+        <div className="max-w-[200px] truncate">
+          {row.category?.categoryName || "—"}
+        </div>
+      )
+    },
+    {
+      header: "Giải thích",
+      accessorKey: "explanation",
+      cell: (row) => (
+        <div className="max-w-xs truncate">
+          {row.explanation || "Không có giải thích"}
+        </div>
+      ),
+      className: "min-w-[300px]"
+    },
+    {
+      header: "Cấp độ",
+      cell: (row) => (
+        <Badge
+          className={`${
+            row.level === "beginner"
+              ? "bg-green-100 text-green-800 hover:bg-green-200"
+              : row.level === "intermediate"
+              ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+              : "bg-red-100 text-red-800 hover:bg-red-200"
+          }`}
+        >
+          {row.level === "beginner"
+            ? "Cơ bản"
+            : row.level === "intermediate"
+            ? "Trung cấp"
+            : "Nâng cao"}
+        </Badge>
+      ),
+    }
+  ];
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[50px]">ID</TableHead>
-            <TableHead className="w-[200px]">Tiêu đề</TableHead>
-            <TableHead className="w-[200px]">Khóa học</TableHead>
-            <TableHead className="min-w-[300px]">Giải thích</TableHead>
-            <TableHead className="text-right w-[120px]">Thao tác</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((content) => (
-            <TableRow key={content.contentId}>
-              <TableCell className="font-medium">{content.contentId}</TableCell>
-              <TableCell>{content.title}</TableCell>
-              <TableCell>{content.category?.categoryName}</TableCell>
-              <TableCell className="max-w-[300px] truncate">
-                {content.explanation}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onEdit(content)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onDelete(content)}
-                    className="text-destructive"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <AdminDataTable
+      columns={columns}
+      data={data}
+      isLoading={isLoading}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      keyField="contentId"
+      emptyMessage="Không có nội dung ngữ pháp nào"
+    />
   );
 }

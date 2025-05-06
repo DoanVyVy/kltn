@@ -21,6 +21,15 @@ const idiomSchema = z.object({
   explanation: z.string().optional(),
 });
 
+// Schema for pronunciation content
+const pronunciationContentSchema = z.object({
+  id: z.number(),
+  type: z.enum(["word", "sentence", "paragraph"]),
+  content: z.string(),
+  audioUrl: z.string().optional(),
+  translation: z.string().optional(),
+});
+
 // Schema for creating a new game activity
 export const createGameActivitySchema = z.object({
   gameTypeId: z.number(),
@@ -708,6 +717,65 @@ const gamesRouter = createTRPCRouter({
         throw error;
       }
     }),
+
+  // New endpoint for pronunciation game
+  getPronunciationGame: baseProcedure.query(async ({ ctx: { db } }) => {
+    try {
+      // Sample pronunciation content - in production this would come from the database
+      const pronunciationContent = [
+        {
+          id: 1,
+          type: "word",
+          content: "Vocabulary",
+          audioUrl: "/audio/vocabulary.mp3",
+          translation: "Từ vựng",
+        },
+        {
+          id: 2,
+          type: "sentence",
+          content: "Learning English requires consistent practice.",
+          audioUrl: "/audio/sentence1.mp3",
+          translation: "Học tiếng Anh đòi hỏi thực hành đều đặn.",
+        },
+        {
+          id: 3,
+          type: "paragraph",
+          content:
+            "The more you practice speaking, the more confident you will become.",
+          audioUrl: "/audio/paragraph1.mp3",
+          translation:
+            "Bạn càng luyện tập nói nhiều, bạn sẽ càng trở nên tự tin hơn.",
+        },
+        {
+          id: 4,
+          type: "word",
+          content: "Pronunciation",
+          audioUrl: "/audio/pronunciation.mp3",
+          translation: "Phát âm",
+        },
+        {
+          id: 5,
+          type: "sentence",
+          content: "She speaks English with perfect pronunciation.",
+          audioUrl: "/audio/sentence2.mp3",
+          translation: "Cô ấy nói tiếng Anh với phát âm hoàn hảo.",
+        },
+      ];
+
+      // In a real implementation, you would fetch this from the database
+      // For example:
+      // const pronunciationContentFromDB = await db.pronunciationContent.findMany({
+      //   orderBy: { difficulty: 'asc' },
+      // });
+
+      return {
+        content: pronunciationContent,
+      };
+    } catch (error) {
+      console.error("Error fetching pronunciation game content:", error);
+      throw error;
+    }
+  }),
 });
 
 export default gamesRouter;

@@ -1,23 +1,23 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
-import { Calendar, Trophy } from "lucide-react"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Calendar, Trophy } from "lucide-react";
 
 // Game types
 interface Game {
-  id: string
-  title: string
-  completed: boolean
-  order: number
+  id: string;
+  title: string;
+  completed: boolean;
+  order: number;
 }
 
 export default function DailyGamesPage() {
-  const router = useRouter()
-  const [streakCount] = useState(5) // This would come from user data in a real app
-  const [isLoading, setIsLoading] = useState(true)
-  const [activeGameId, setActiveGameId] = useState<string | null>(null)
+  const router = useRouter();
+  const [streakCount] = useState(5); // This would come from user data in a real app
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeGameId, setActiveGameId] = useState<string | null>(null);
 
   // Define all available games
   const games: Game[] = [
@@ -45,28 +45,28 @@ export default function DailyGamesPage() {
       completed: false,
       order: 4,
     },
-  ]
+  ];
 
   useEffect(() => {
     // Simulate loading and fetching game state
     const timer = setTimeout(() => {
       // Find the first uncompleted game
-      const nextGame = games.find((game) => !game.completed)
+      const nextGame = games.find((game) => !game.completed);
       if (nextGame) {
-        setActiveGameId(nextGame.id)
+        setActiveGameId(nextGame.id);
       }
-      setIsLoading(false)
-    }, 1000)
+      setIsLoading(false);
+    }, 1000);
 
-    return () => clearTimeout(timer)
-  }, [])
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // Redirect to the first game (word-guess) after loading
     if (!isLoading) {
-      router.push(`/daily-games/word-guess`)
+      router.push(`/daily-games/word-guess`);
     }
-  }, [isLoading, router])
+  }, [isLoading, router]);
 
   if (isLoading) {
     return (
@@ -80,7 +80,11 @@ export default function DailyGamesPage() {
           <motion.div
             className="relative"
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+            transition={{
+              duration: 2,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "linear",
+            }}
           >
             <div className="absolute inset-0 rounded-full bg-gradient-to-r from-game-primary to-game-secondary blur-lg opacity-70"></div>
             <div className="relative w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg">
@@ -132,7 +136,11 @@ export default function DailyGamesPage() {
             >
               <Calendar className="h-5 w-5 text-game-primary" />
               <span className="text-game-accent font-medium">
-                {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                {new Date().toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
               </span>
             </motion.div>
 
@@ -145,15 +153,16 @@ export default function DailyGamesPage() {
               }}
             >
               <Trophy className="h-5 w-5 text-amber-500" />
-              <span className="text-game-accent font-medium">{streakCount} day streak</span>
+              <span className="text-game-accent font-medium">
+                {streakCount} day streak
+              </span>
             </motion.div>
           </motion.div>
         </motion.div>
       </div>
-    )
+    );
   }
 
   // This page should never be visible as we redirect to the active game
-  return null
+  return null;
 }
-
