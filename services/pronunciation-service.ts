@@ -5,7 +5,7 @@ import {
 
 /**
  * PronunciationService - A service for evaluating pronunciation
- * This version includes fallback mock data when API keys are not available
+ * Uses iFlytek for speech-to-text and Gemini API for pronunciation evaluation
  */
 export class PronunciationService {
   private geminiApiKey: string;
@@ -14,7 +14,6 @@ export class PronunciationService {
   private iFlytekApiSecret: string;
   private geminiEndpoint: string;
   private iFlytekEndpoint: string;
-  private useMockData: boolean;
 
   constructor(config?: {
     geminiApiKey?: string;
@@ -34,8 +33,16 @@ export class PronunciationService {
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
     this.iFlytekEndpoint = "https://api.xfyun.cn/v1/service/v1/iat";
 
-    // Use mock data if API keys are not available
-    this.useMockData = !this.geminiApiKey || !this.iFlytekAppId;
+    // Verify that API keys are provided
+    if (!this.geminiApiKey) {
+      throw new Error(
+        "Gemini API key is required for pronunciation evaluation"
+      );
+    }
+
+    if (!this.iFlytekAppId || !this.iFlytekApiKey) {
+      throw new Error("iFlytek credentials are required for speech-to-text");
+    }
   }
 
   /**
@@ -62,7 +69,6 @@ export class PronunciationService {
     audioBase64: string
   ): Record<string, string> {
     // In a production environment, you would compute these values using cryptographic functions
-    // Here we're just providing a basic structure
     const timestamp = Math.floor(Date.now() / 1000);
 
     // Note: In a real implementation, you'd use a proper library to calculate the signature
@@ -84,28 +90,12 @@ export class PronunciationService {
 
   /**
    * Transcribe audio to text using iFlytek's Speech Recognition API
-   * Falls back to mock data if API keys aren't available
    */
   async transcribeAudio(
     audioBlob: Blob,
     languageCode: string = "en_us"
   ): Promise<TranscriptionResult> {
     try {
-      // If using mock data, generate a fake transcription
-      if (this.useMockData) {
-        console.log("Using mock transcription service");
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API delay
-
-        // Generate a simulated transcription with random accuracy
-        const accuracy = 0.7 + Math.random() * 0.25;
-        return {
-          transcript: "This is a mock transcription for testing purposes.",
-          confidence: accuracy,
-          success: true,
-        };
-      }
-
-      // Regular API implementation
       const audioBase64 = await this.audioToBase64(audioBlob);
       const headers = this.generateIFlytekAuthHeaders(audioBase64);
       const formData = new URLSearchParams();
@@ -139,20 +129,14 @@ export class PronunciationService {
         confidence,
         success: true,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error transcribing audio with iFlytek:", error);
-      // Fallback to mock data even if API call fails
-      return {
-        transcript: "Fallback transcription after API error.",
-        confidence: 0.7,
-        success: true,
-      };
+      throw new Error(`Speech-to-text transcription failed: ${error.message}`);
     }
   }
 
   /**
    * Evaluate pronunciation by sending audio recording to Gemini API
-   * Falls back to mock data if API keys aren't available
    */
   async evaluatePronunciation(
     audioBlob: Blob,
@@ -161,76 +145,6 @@ export class PronunciationService {
     languageCode: string = "en_us"
   ): Promise<PronunciationFeedback> {
     try {
-      // If using mock data, generate fake feedback
-      if (this.useMockData) {
-        console.log("Using mock pronunciation evaluation service");
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate API delay
-
-        // Generate random scores
-        const accuracy = 60 + Math.floor(Math.random() * 30);
-        const fluency = 65 + Math.floor(Math.random() * 25);
-        const prosody = 70 + Math.floor(Math.random() * 20);
-        const textMatch = 75 + Math.floor(Math.random() * 20);
-
-        // Calculate overall score with text match having double weight
-        const overall = Math.floor(
-          (accuracy + fluency + prosody + textMatch * 2) / 5
-        );
-
-        // Split text into words for analysis
-        const words = textToEvaluate.split(/\s+/);
-        const wordAnalysis = words.map((word) => {
-          const isCorrect = Math.random() > 0.3;
-          return {
-            word: word.replace(/[.,?!;:"'()]/g, ""),
-            correctlyPronounced: isCorrect,
-            feedback: isCorrect
-              ? "Good pronunciation of this word."
-              : `Work on the ${
-                  Math.random() > 0.5 ? "vowel" : "consonant"
-                } sounds in this word.`,
-          };
-        });
-
-        // Generate feedback based on overall score
-        let feedback = [];
-        if (overall < 70) {
-          feedback = [
-            "Try to speak more clearly and at a moderate pace.",
-            "Focus on the rhythm and stress patterns of English sentences.",
-            "Practice the specific sounds marked as incorrect.",
-          ];
-        } else if (overall < 85) {
-          feedback = [
-            "Your pronunciation is good, but could use refinement in stress patterns.",
-            "Work on linking words smoothly in sentences.",
-            "Pay attention to the intonation at the end of questions.",
-          ];
-        } else {
-          feedback = [
-            "Excellent pronunciation! Just minor refinements needed.",
-            "Continue practicing to maintain your pronunciation skills.",
-            "You have very good command of English sounds and rhythm.",
-          ];
-        }
-
-        return {
-          overall,
-          details: {
-            accuracy,
-            fluency,
-            prosody,
-            textMatch,
-          },
-          feedback,
-          wordAnalysis,
-          transcribedText:
-            transcribedText || "Mock transcribed text for testing",
-          originalText: textToEvaluate,
-        };
-      }
-
-      // Regular API implementation
       const audioBase64 = await this.audioToBase64(audioBlob);
 
       // Get transcription if not provided
@@ -314,7 +228,9 @@ export class PronunciationService {
       );
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        throw new Error(
+          `Gemini API request failed with status ${response.status}`
+        );
       }
 
       const data = await response.json();
@@ -335,51 +251,19 @@ export class PronunciationService {
         transcribedText: transcription,
         originalText: textToEvaluate,
       } as PronunciationFeedback;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error evaluating pronunciation:", error);
-
-      // Return mock feedback on API failure
-      const overall = 78;
-      return {
-        overall,
-        details: {
-          accuracy: 75,
-          fluency: 80,
-          prosody: 72,
-          textMatch: 85,
-        },
-        feedback: [
-          "Fallback feedback: Focus on rhythm and intonation.",
-          "Work on connecting words smoothly in sentences.",
-          "Pay attention to stress patterns in multi-syllable words.",
-        ],
-        wordAnalysis: textToEvaluate.split(/\s+/).map((word) => ({
-          word: word.replace(/[.,?!;:"'()]/g, ""),
-          correctlyPronounced: Math.random() > 0.3,
-          feedback: "Fallback analysis for this word.",
-        })),
-        transcribedText: transcribedText || "Fallback transcription",
-        originalText: textToEvaluate,
-      };
+      throw new Error(`Pronunciation evaluation failed: ${error.message}`);
     }
   }
 
   /**
-   * Simple test to check if the API key is valid with fallback support
+   * Check if the API keys are valid and services are accessible
    */
   async testApiConnection(): Promise<{
     geminiApiValid: boolean;
     iFlytekApiValid: boolean;
   }> {
-    if (this.useMockData) {
-      console.log("Using mock API connection test");
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      return {
-        geminiApiValid: true, // Pretend the connection works
-        iFlytekApiValid: true,
-      };
-    }
-
     try {
       // Test Gemini API
       const geminiResponse = await fetch(
@@ -412,7 +296,7 @@ export class PronunciationService {
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
       };
 
-      // Simple connection test - in reality you'd need a valid audio sample
+      // Simple connection test
       const iFlytekResponse = await fetch(
         `${this.iFlytekEndpoint}/validate_connection`,
         {
@@ -424,10 +308,9 @@ export class PronunciationService {
       const iFlytekApiValid = iFlytekResponse.ok;
 
       return { geminiApiValid, iFlytekApiValid };
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error testing API connection:", error);
-      // Return mock success in case of connection error
-      return { geminiApiValid: true, iFlytekApiValid: true };
+      throw new Error(`API connection test failed: ${error.message}`);
     }
   }
 }
