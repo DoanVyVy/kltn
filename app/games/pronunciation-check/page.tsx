@@ -22,6 +22,9 @@ import {
   BarChart3,
   FileText,
   ZoomIn,
+  Waveform,
+  Volume,
+  BadgeHelp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +48,12 @@ import {
   TranscriptionResult,
   WordAnalysis,
 } from "@/types/pronunciation";
+
+// Audio processing utilities
+const audioContext =
+  typeof window !== "undefined"
+    ? new (window.AudioContext || (window as any).webkitAudioContext)()
+    : null;
 
 // Animation variants
 const containerVariants = {
@@ -110,12 +119,24 @@ export default function PronunciationCheckGame() {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
   const [showWordAnalysis, setShowWordAnalysis] = useState(false);
-
+  const [audioFrequencyData, setAudioFrequencyData] = useState<number[]>([]);
+  const [showWaveform, setShowWaveform] = useState(false);
+  const [difficultyLevel, setDifficultyLevel] = useState(1);
+  const [userPerformanceHistory, setUserPerformanceHistory] = useState<
+    number[]
+  >([]);
+  const [pronunciationCache] = useState<Map<string, PronunciationFeedback>>(
+    new Map()
+  );
+  const [phoneticGuides, setPhoneticGuides] = useState<Map<string, string>>(
+    new Map()
+  );
   const [gameStats, setGameStats] = useState({
     sessionsCompleted: 0,
     streak: 0,
     averageScore: 0,
   });
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
 
   // Timer interval ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -147,13 +168,12 @@ export default function PronunciationCheckGame() {
     },
   ];
 
-  // Game data fetching - Sửa đổi API endpoint từ games.getDailyGame sang một endpoint khác phù hợp
+  // Game data fetching
   const { data: gameData, isLoading: isLoadingGameData } =
     trpc.games.getPronunciationGame.useQuery(undefined, {
       staleTime: 1000 * 60 * 5, // 5 minutes
       onSuccess: (data) => {
         if (data?.content) {
-          // Sử dụng dữ liệu từ API
           setPronunciationContents(data.content);
         } else {
           setPronunciationContents(sampleContents);
@@ -161,7 +181,6 @@ export default function PronunciationCheckGame() {
         setIsLoading(false);
       },
       onError: () => {
-        // Fallback to sample content if API fails
         setPronunciationContents(sampleContents);
         setIsLoading(false);
       },
@@ -236,7 +255,34 @@ export default function PronunciationCheckGame() {
     };
   }, []);
 
-  // Handle automatic redirection after winning
+  useEffect(() => {
+    if (currentFeedback) {
+      const newHistory = [...userPerformanceHistory, currentFeedback.overall];
+      setUserPerformanceHistory(newHistory);
+
+      if (newHistory.length >= 3) {
+        const recentAverage =
+          newHistory.slice(-3).reduce((a, b) => a + b, 0) / 3;
+
+        if (recentAverage > 85 && difficultyLevel < 3) {
+          setDifficultyLevel((prev) => prev + 1);
+          toast({
+            title: "Level Up!",
+            description: "You've advanced to a more challenging level!",
+            variant: "success",
+          });
+        } else if (recentAverage < 60 && difficultyLevel > 1) {
+          setDifficultyLevel((prev) => prev - 1);
+          toast({
+            title: "Adjusting Difficulty",
+            description: "We've adjusted the difficulty to help you improve.",
+            variant: "info",
+          });
+        }
+      }
+    }
+  }, [currentFeedback, userPerformanceHistory, difficultyLevel, toast]);
+
   useEffect(() => {
     if (isRedirecting && redirectCountdown > 0) {
       const timer = setTimeout(() => {
@@ -245,10 +291,121 @@ export default function PronunciationCheckGame() {
 
       return () => clearTimeout(timer);
     } else if (isRedirecting && redirectCountdown === 0) {
-      // Chuyển hướng đến trang games chính thay vì daily-games
       router.push("/games");
     }
   }, [isRedirecting, redirectCountdown, router]);
+
+  const preprocessAudio = async (audioBlob: Blob): Promise<Blob> => {
+    if (!audioContext) return audioBlob;
+
+    try {
+      setIsProcessingAudio(true);
+      toast({
+        title: "Processing Audio",
+        description: "Enhancing audio quality for better recognition...",
+        variant: "default",
+      });
+
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      const noiseThreshold = 0.01;
+      const newBuffer = audioContext.createBuffer(
+        audioBuffer.numberOfChannels,
+        audioBuffer.length,
+        audioBuffer.sampleRate
+      );
+
+      for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        const inputData = audioBuffer.getChannelData(channel);
+        const outputData = newBuffer.getChannelData(channel);
+
+        for (let i = 0; i < inputData.length; i++) {
+          outputData[i] =
+            Math.abs(inputData[i]) < noiseThreshold ? 0 : inputData[i];
+        }
+      }
+
+      const offlineContext = new OfflineAudioContext(
+        audioBuffer.numberOfChannels,
+        audioBuffer.length,
+        audioBuffer.sampleRate
+      );
+
+      const source = offlineContext.createBufferSource();
+      source.buffer = newBuffer;
+      source.connect(offlineContext.destination);
+      source.start();
+
+      const renderedBuffer = await offlineContext.startRendering();
+
+      const wavBlob = await convertToWav(renderedBuffer);
+
+      setIsProcessingAudio(false);
+      return wavBlob;
+    } catch (error) {
+      console.error("Error preprocessing audio:", error);
+      setIsProcessingAudio(false);
+      return audioBlob;
+    }
+  };
+
+  const convertToWav = (buffer: AudioBuffer): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const numOfChannels = buffer.numberOfChannels;
+      const length = buffer.length * numOfChannels * 2;
+      const sampleRate = buffer.sampleRate;
+      const data = new Uint8Array(44 + length);
+
+      writeString(data, 0, "RIFF");
+      data[4] = (length + 36) & 0xff;
+      data[5] = ((length + 36) >> 8) & 0xff;
+      data[6] = ((length + 36) >> 16) & 0xff;
+      data[7] = ((length + 36) >> 24) & 0xff;
+      writeString(data, 8, "WAVE");
+      writeString(data, 12, "fmt ");
+      data[16] = 16;
+      data[20] = 1;
+      data[22] = numOfChannels;
+      data[24] = sampleRate & 0xff;
+      data[25] = (sampleRate >> 8) & 0xff;
+      data[26] = (sampleRate >> 16) & 0xff;
+      data[27] = (sampleRate >> 24) & 0xff;
+      const bytesPerSecond = sampleRate * numOfChannels * 2;
+      data[28] = bytesPerSecond & 0xff;
+      data[29] = (bytesPerSecond >> 8) & 0xff;
+      data[30] = (bytesPerSecond >> 16) & 0xff;
+      data[31] = (bytesPerSecond >> 24) & 0xff;
+      data[32] = numOfChannels * 2;
+      data[34] = 16;
+      writeString(data, 36, "data");
+      data[40] = length & 0xff;
+      data[41] = (length >> 8) & 0xff;
+      data[42] = (length >> 16) & 0xff;
+      data[43] = (length >> 24) & 0xff;
+
+      let index = 44;
+      for (let i = 0; i < buffer.length; i++) {
+        for (let channel = 0; channel < numOfChannels; channel++) {
+          const sample = Math.max(
+            -1,
+            Math.min(1, buffer.getChannelData(channel)[i])
+          );
+          const int16 = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+          data[index++] = int16 & 0xff;
+          data[index++] = (int16 >> 8) & 0xff;
+        }
+      }
+
+      resolve(new Blob([data], { type: "audio/wav" }));
+    });
+  };
+
+  const writeString = (data: Uint8Array, offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      data[offset + i] = str.charCodeAt(i);
+    }
+  };
 
   const playOriginalAudio = () => {
     if (!audioRef.current) return;
@@ -258,7 +415,6 @@ export default function PronunciationCheckGame() {
       audioRef.current.src = content.audioUrl;
       audioRef.current.play();
     } else {
-      // If no audio URL, use speech synthesis
       const utterance = new SpeechSynthesisUtterance(content.content);
       utterance.lang = "en-US";
       utterance.rate = 0.9;
@@ -295,16 +451,13 @@ export default function PronunciationCheckGame() {
         const url = URL.createObjectURL(audioBlob);
         setUserAudioUrl(url);
 
-        // Reset transcription when recording a new attempt
         setTranscriptionResult(null);
       };
 
-      // Start recording
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
 
-      // Set up timer
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => {
           if (prev >= maxRecordingTime) {
@@ -340,7 +493,6 @@ export default function PronunciationCheckGame() {
       timerRef.current = null;
     }
 
-    // Close audio tracks
     mediaRecorderRef.current.stream
       .getTracks()
       .forEach((track) => track.stop());
@@ -352,8 +504,11 @@ export default function PronunciationCheckGame() {
     setIsTranscribing(true);
 
     try {
-      // Call the speech-to-text service
-      const result = await pronunciationService.transcribeAudio(audioBlob);
+      const processedAudioBlob = await preprocessAudio(audioBlob);
+
+      const result = await pronunciationService.transcribeAudio(
+        processedAudioBlob
+      );
       setTranscriptionResult(result);
     } catch (error) {
       console.error("Error transcribing audio:", error);
@@ -373,45 +528,87 @@ export default function PronunciationCheckGame() {
     setIsProcessing(true);
 
     try {
-      // First transcribe the audio if not already done
+      const processedAudioBlob = await preprocessAudio(audioBlob);
+
       let transcribedText = transcriptionResult?.transcript;
 
       if (!transcribedText) {
         setIsTranscribing(true);
         const transcription = await pronunciationService.transcribeAudio(
-          audioBlob
+          processedAudioBlob
         );
         setTranscriptionResult(transcription);
         transcribedText = transcription.transcript;
         setIsTranscribing(false);
       }
 
-      // Now evaluate the pronunciation with the text and audio
       const currentContent = pronunciationContents[currentContentIndex];
       const textToEvaluate = currentContent.content;
+      const cacheKey = `${textToEvaluate}_${transcribedText}_${difficultyLevel}`;
 
-      const feedback = await pronunciationService.evaluatePronunciation(
-        audioBlob,
-        textToEvaluate,
-        transcribedText
-      );
+      let feedback: PronunciationFeedback | null = null;
+
+      if (pronunciationCache.has(cacheKey)) {
+        feedback = pronunciationCache.get(cacheKey)!;
+        console.log("Using cached pronunciation feedback");
+      } else {
+        let retries = 0;
+        const maxRetries = 3;
+
+        while (retries < maxRetries && !feedback) {
+          try {
+            feedback = await pronunciationService.evaluatePronunciation(
+              processedAudioBlob,
+              textToEvaluate,
+              transcribedText
+            );
+
+            pronunciationCache.set(cacheKey, feedback);
+          } catch (error) {
+            retries++;
+            console.error(`API call failed, retry ${retries}/${maxRetries}`);
+            if (retries >= maxRetries) throw error;
+            await new Promise((r) => setTimeout(r, 1000 * retries));
+          }
+        }
+      }
+
+      if (!feedback) {
+        throw new Error(
+          "Failed to get pronunciation feedback after multiple retries"
+        );
+      }
 
       setCurrentFeedback(feedback);
       setFeedbacks([...feedbacks, feedback]);
 
-      // Check if game is won or over
-      const isSuccess = feedback.overall >= 75; // Consider 75% as passing score
+      if (feedback.wordAnalysis) {
+        const newPhoneticGuides = new Map(phoneticGuides);
+        feedback.wordAnalysis.forEach((analysis) => {
+          if (!phoneticGuides.has(analysis.word.toLowerCase())) {
+            newPhoneticGuides.set(
+              analysis.word.toLowerCase(),
+              generatePhoneticGuide(analysis.word)
+            );
+          }
+        });
+        setPhoneticGuides(newPhoneticGuides);
+      }
+
+      const isSuccess = feedback.overall >= 75;
 
       if (isSuccess) {
         setGameWon(true);
         setGameOver(true);
         setMessage("Excellent pronunciation! You've completed this challenge.");
 
-        // Award XP and update game stats
         addExperienceMutation.mutate({ amount: 50, source: "practice_game" });
-        completeGameMutation.mutate({ gameType: "pronunciation-check" });
+        completeGameMutation.mutate({
+          gameType: "pronunciation-check",
+          score: feedback.overall,
+          difficultyLevel: difficultyLevel,
+        });
 
-        // Start redirect countdown after a delay
         setTimeout(() => {
           setIsRedirecting(true);
         }, 3000);
@@ -439,139 +636,115 @@ export default function PronunciationCheckGame() {
     }
   };
 
-  const moveToNextContent = () => {
-    if (currentContentIndex < pronunciationContents.length - 1) {
-      setCurrentContentIndex(currentContentIndex + 1);
-      resetStates();
-    } else {
-      // End of game
-      setGameOver(true);
-      setGameWon(true);
-      setMessage("You've completed all pronunciation challenges!");
+  const generatePhoneticGuide = (word: string): string => {
+    if (phoneticGuides.has(word.toLowerCase())) {
+      return phoneticGuides.get(word.toLowerCase())!;
+    }
 
-      // Award XP if not already awarded
-      if (!gameWon) {
-        addExperienceMutation.mutate({ amount: 50, source: "practice_game" });
-        completeGameMutation.mutate({ gameType: "pronunciation-check" });
+    let phonetic = "/";
+    const vowels = ["a", "e", "i", "o", "u"];
+    const consonantClusters = ["ch", "sh", "th", "ph", "wh", "qu"];
+
+    let i = 0;
+    while (i < word.length) {
+      let foundCluster = false;
+      for (const cluster of consonantClusters) {
+        if (
+          i + cluster.length <= word.length &&
+          word.substring(i, i + cluster.length).toLowerCase() === cluster
+        ) {
+          switch (cluster) {
+            case "ch":
+              phonetic += "tʃ";
+              break;
+            case "sh":
+              phonetic += "ʃ";
+              break;
+            case "th":
+              phonetic += "θ";
+              break;
+            case "ph":
+              phonetic += "f";
+              break;
+            case "wh":
+              phonetic += "w";
+              break;
+            case "qu":
+              phonetic += "kw";
+              break;
+          }
+          i += cluster.length;
+          foundCluster = true;
+          break;
+        }
       }
 
-      // Start redirect countdown after a delay
-      setTimeout(() => {
-        setIsRedirecting(true);
-      }, 3000);
-    }
-  };
+      if (foundCluster) continue;
 
-  const resetStates = () => {
-    setCurrentFeedback(null);
-    setTranscriptionResult(null);
-    setAudioBlob(null);
-    setUserAudioUrl(null);
-    setAttemptsLeft(3);
-    setMessage(null);
-    setGameWon(false);
-    setGameOver(false);
-    setShowWordAnalysis(false);
-  };
+      const char = word[i].toLowerCase();
+      if (vowels.includes(char)) {
+        switch (char) {
+          case "a":
+            phonetic += "æ";
+            break;
+          case "e":
+            phonetic += "ɛ";
+            break;
+          case "i":
+            phonetic += "ɪ";
+            break;
+          case "o":
+            phonetic += "ɒ";
+            break;
+          case "u":
+            phonetic += "ʌ";
+            break;
+          default:
+            phonetic += char;
+        }
+      } else {
+        phonetic += char;
+      }
 
-  const resetGame = () => {
-    resetStates();
-  };
-
-  /**
-   * Display function to highlight correctly and incorrectly pronounced words
-   */
-  const renderWordComparison = () => {
-    if (
-      !currentFeedback?.transcribedText ||
-      !currentFeedback?.wordAnalysis ||
-      currentFeedback.wordAnalysis.length === 0
-    ) {
-      return (
-        <div className="italic text-gray-500 text-center py-3">
-          Word analysis not available
-        </div>
-      );
+      i++;
     }
 
-    // Map of words to their analysis
-    const wordAnalysisMap = new Map<string, WordAnalysis>();
-    currentFeedback.wordAnalysis.forEach((analysis) => {
-      wordAnalysisMap.set(analysis.word.toLowerCase(), analysis);
-    });
+    phonetic += "/";
 
-    // Original text words
-    const originalWords = currentFeedback.originalText?.split(/\s+/) || [];
+    phoneticGuides.set(word.toLowerCase(), phonetic);
 
-    // Transcribed text words
-    const transcribedWords = currentFeedback.transcribedText.split(/\s+/);
+    return phonetic;
+  };
+
+  const renderWaveform = () => {
+    if (!showWaveform || audioFrequencyData.length === 0) return null;
 
     return (
-      <div className="space-y-4">
-        {/* Original text */}
-        <div className="bg-slate-50 p-3 rounded-lg">
-          <h4 className="text-sm font-medium text-gray-500 mb-2">
-            Target Text:
-          </h4>
-          <div className="flex flex-wrap gap-1">
-            {originalWords.map((word, index) => {
-              const cleanWord = word.replace(/[.,?!;:"'()]/g, "").toLowerCase();
-              const analysis = wordAnalysisMap.get(cleanWord);
-
-              return (
-                <span
-                  key={`original-${index}`}
-                  className={`px-1 py-0.5 rounded ${
-                    analysis
-                      ? analysis.correctlyPronounced
-                        ? "bg-green-100"
-                        : "bg-red-100"
-                      : "bg-transparent"
-                  }`}
-                  title={analysis?.feedback || ""}
-                >
-                  {word}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Transcribed text */}
-        <div className="bg-slate-50 p-3 rounded-lg">
-          <h4 className="text-sm font-medium text-gray-500 mb-2">
-            Your Speech (Transcribed):
-          </h4>
-          <div className="flex flex-wrap gap-1">
-            {transcribedWords.map((word, index) => {
-              const cleanWord = word.replace(/[.,?!;:"'()]/g, "").toLowerCase();
-
-              // Check if this word is in the original text
-              const isInOriginal = originalWords.some(
-                (w) =>
-                  w.replace(/[.,?!;:"'()]/g, "").toLowerCase() === cleanWord
-              );
-
-              return (
-                <span
-                  key={`transcribed-${index}`}
-                  className={`px-1 py-0.5 rounded ${
-                    isInOriginal ? "bg-green-100" : "bg-yellow-100"
-                  }`}
-                >
-                  {word}
-                </span>
-              );
-            })}
+      <div className="mt-4">
+        <h4 className="text-sm font-medium mb-2 flex items-center">
+          <Waveform className="h-4 w-4 mr-2 text-game-primary" />
+          Audio Waveform
+        </h4>
+        <div className="relative h-24 bg-gray-50 rounded-lg overflow-hidden p-2 border border-gray-200">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex items-end h-full w-full px-2">
+              {audioFrequencyData.map((value, index) => (
+                <div
+                  key={index}
+                  className="flex-1 mx-px bg-game-primary/70 rounded-t"
+                  style={{
+                    height: `${Math.max(4, value)}%`,
+                    opacity: value > 50 ? 1 : 0.7,
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
-  /**
-   * Display function to show detailed word analysis
-   */
   const renderWordAnalysis = () => {
     if (
       !currentFeedback?.wordAnalysis ||
@@ -596,7 +769,28 @@ export default function PronunciationCheckGame() {
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="font-medium">{analysis.word}</span>
+              <div className="flex items-center">
+                <span className="font-medium">{analysis.word}</span>
+                <span className="text-xs text-gray-500 ml-2">
+                  {phoneticGuides.get(analysis.word.toLowerCase()) ||
+                    generatePhoneticGuide(analysis.word)}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 ml-1 text-gray-400 hover:text-game-primary"
+                  onClick={() => {
+                    const utterance = new SpeechSynthesisUtterance(
+                      analysis.word
+                    );
+                    utterance.lang = "en-US";
+                    utterance.rate = 0.8;
+                    speechSynthesis.speak(utterance);
+                  }}
+                >
+                  <Volume className="h-3 w-3" />
+                </Button>
+              </div>
               {analysis.correctlyPronounced ? (
                 <Check className="h-4 w-4 text-green-500" />
               ) : (
@@ -610,6 +804,70 @@ export default function PronunciationCheckGame() {
     );
   };
 
+  const resetStates = () => {
+    setCurrentFeedback(null);
+    setTranscriptionResult(null);
+    setAudioBlob(null);
+    setUserAudioUrl(null);
+    setAttemptsLeft(3);
+    setMessage(null);
+    setGameWon(false);
+    setGameOver(false);
+    setShowWordAnalysis(false);
+    setShowWaveform(false);
+    setAudioFrequencyData([]);
+  };
+
+  const getCurrentContent = () => {
+    if (pronunciationContents.length >= 3) {
+      const contentGroups = [
+        pronunciationContents.filter((c) => c.type === "word"),
+        pronunciationContents.filter((c) => c.type === "sentence"),
+        pronunciationContents.filter((c) => c.type === "paragraph"),
+      ];
+
+      const levelContents =
+        contentGroups[difficultyLevel - 1] || pronunciationContents;
+
+      const contentIndex = currentContentIndex % levelContents.length;
+      return (
+        levelContents[contentIndex] ||
+        pronunciationContents[currentContentIndex]
+      );
+    }
+
+    return pronunciationContents[currentContentIndex];
+  };
+
+  const moveToNextContent = () => {
+    if (currentContentIndex < pronunciationContents.length - 1) {
+      setCurrentContentIndex(currentContentIndex + 1);
+      resetStates();
+    } else {
+      // End of game
+      setGameOver(true);
+      setGameWon(true);
+      setMessage("You've completed all pronunciation challenges!");
+
+      // Award XP if not already awarded
+      if (!gameWon) {
+        addExperienceMutation.mutate({ amount: 50, source: "practice_game" });
+        completeGameMutation.mutate({
+          gameType: "pronunciation-check",
+          score: currentFeedback?.overall || 75,
+          difficultyLevel: difficultyLevel,
+        });
+      }
+
+      // Start redirect countdown after a delay
+      setTimeout(() => {
+        setIsRedirecting(true);
+      }, 3000);
+    }
+  };
+
+  const currentContent = getCurrentContent();
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-game-background to-white flex items-center justify-center">
@@ -620,8 +878,6 @@ export default function PronunciationCheckGame() {
       </div>
     );
   }
-
-  const currentContent = pronunciationContents[currentContentIndex];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-game-background to-white">
@@ -667,8 +923,20 @@ export default function PronunciationCheckGame() {
                 <Sparkles className="h-5 w-5 text-amber-500" />
               </motion.span>
             </h1>
-            <p className="text-game-accent/80">
+            <p className="text-game-accent/80 flex items-center">
               Practice your English pronunciation with AI feedback
+              <Badge
+                variant="outline"
+                className={`ml-4 ${
+                  difficultyLevel === 1
+                    ? "bg-green-50 text-green-700"
+                    : difficultyLevel === 2
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-purple-50 text-purple-700"
+                }`}
+              >
+                Level {difficultyLevel}
+              </Badge>
             </p>
           </motion.div>
 
@@ -768,6 +1036,9 @@ export default function PronunciationCheckGame() {
                     </Button>
                   </motion.div>
                 </motion.div>
+
+                {/* Display waveform when available */}
+                {showWaveform && renderWaveform()}
 
                 {/* Transcription result */}
                 <AnimatePresence>
@@ -928,12 +1199,14 @@ export default function PronunciationCheckGame() {
                           <Button
                             className="game-button rounded-full"
                             onClick={evaluatePronunciation}
-                            disabled={isProcessing}
+                            disabled={isProcessing || isProcessingAudio}
                           >
-                            {isProcessing ? (
+                            {isProcessing || isProcessingAudio ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Analyzing...
+                                {isProcessingAudio
+                                  ? "Enhancing audio..."
+                                  : "Analyzing..."}
                               </>
                             ) : (
                               <>Submit for evaluation</>
@@ -960,7 +1233,15 @@ export default function PronunciationCheckGame() {
                         </h3>
                         <div className="inline-block rounded-full bg-white px-4 py-2 border shadow-sm">
                           <div className="flex items-center justify-center">
-                            <span className="text-2xl font-bold text-game-primary">
+                            <span
+                              className={`text-2xl font-bold ${
+                                currentFeedback.overall >= 75
+                                  ? "text-green-600"
+                                  : currentFeedback.overall >= 60
+                                  ? "text-amber-600"
+                                  : "text-red-600"
+                              }`}
+                            >
                               {currentFeedback.overall}%
                             </span>
                             <span className="ml-1 text-sm text-game-accent/70">
@@ -1063,7 +1344,7 @@ export default function PronunciationCheckGame() {
                         >
                           <h3 className="font-medium text-game-accent flex items-center">
                             <ZoomIn className="mr-2 h-4 w-4" />
-                            Detailed Word Analysis
+                            Detailed Word Analysis with IPA Phonetics
                           </h3>
                           <Button
                             variant="ghost"
@@ -1079,7 +1360,16 @@ export default function PronunciationCheckGame() {
                         </div>
 
                         {showWordAnalysis && (
-                          <div className="p-3">{renderWordAnalysis()}</div>
+                          <div className="p-3">
+                            <div className="flex items-center mb-3 text-sm text-gray-500">
+                              <BadgeHelp className="h-4 w-4 mr-1" />
+                              <span>
+                                Tap on the speaker icon to hear the correct
+                                pronunciation of each word
+                              </span>
+                            </div>
+                            {renderWordAnalysis()}
+                          </div>
                         )}
                       </div>
 
@@ -1290,6 +1580,43 @@ export default function PronunciationCheckGame() {
                     </motion.div>
                   </div>
 
+                  {/* Difficulty level indicator */}
+                  <motion.div
+                    className={`border rounded-xl p-3 text-center ${
+                      difficultyLevel === 1
+                        ? "bg-green-50 border-green-100 text-green-700"
+                        : difficultyLevel === 2
+                        ? "bg-blue-50 border-blue-100 text-blue-700"
+                        : "bg-purple-50 border-purple-100 text-purple-700"
+                    }`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <h3 className="font-medium flex items-center justify-center">
+                      <BadgeHelp className="h-4 w-4 mr-1" />
+                      Current Difficulty Level
+                    </h3>
+                    <p className="text-sm mt-1">
+                      {difficultyLevel === 1
+                        ? "Beginner - Focus on single words and simple sentences"
+                        : difficultyLevel === 2
+                        ? "Intermediate - Longer sentences with varied intonation"
+                        : "Advanced - Complex paragraphs and fluent speech"}
+                    </p>
+                    <div className="mt-2 bg-white/50 rounded-full h-2 w-full">
+                      <div
+                        className={`h-2 rounded-full ${
+                          difficultyLevel === 1
+                            ? "bg-green-500 w-1/3"
+                            : difficultyLevel === 2
+                            ? "bg-blue-500 w-2/3"
+                            : "bg-purple-500 w-full"
+                        }`}
+                      />
+                    </div>
+                  </motion.div>
+
                   {/* Experience reward highlight */}
                   <motion.div
                     className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center"
@@ -1352,6 +1679,19 @@ export default function PronunciationCheckGame() {
                     </div>
                   </div>
 
+                  {/* Audio processing info */}
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <h3 className="text-sm font-medium mb-2 flex items-center text-blue-700">
+                      <Waveform className="h-4 w-4 mr-2" />
+                      Audio Enhancement
+                    </h3>
+                    <p className="text-sm text-blue-700/80">
+                      Your recordings are automatically enhanced with noise
+                      reduction to improve transcription accuracy and evaluation
+                      quality.
+                    </p>
+                  </div>
+
                   <div className="pt-2">
                     <h3 className="text-sm font-medium mb-2">How to Play</h3>
                     <ul className="space-y-2 text-sm text-game-accent/70 list-disc list-inside">
@@ -1359,8 +1699,9 @@ export default function PronunciationCheckGame() {
                       <li>Record yourself saying the word/sentence</li>
                       <li>Submit your recording for AI evaluation</li>
                       <li>Review your score and detailed feedback</li>
-                      <li>Pay attention to highlighted problem areas</li>
+                      <li>Use the phonetic guides to improve pronunciation</li>
                       <li>You need to achieve at least 75% to pass</li>
+                      <li>Practice consistently to unlock harder levels</li>
                     </ul>
                   </div>
                 </CardContent>
