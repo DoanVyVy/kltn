@@ -19,11 +19,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Navigation from "@/components/navigation"
+import { useToast } from "@/hooks/use-toast"
+import { trpc } from "@/trpc/client"
 
 // Types
 interface Word {
   id: string
   text: string
+}
+
+interface Sentence {
+  original: string
+  hint?: string
+  words: Word[]
+  completed: boolean
+}
+
+interface GameData {
+  id: number
+  sentences: Array<{original: string, scrambled: string[]}>
 }
 
 // Animation variants
@@ -49,7 +63,9 @@ const itemVariants = {
 
 export default function SentenceScramblePage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
+  
+  const [isLoading, setIsLoading] = useState(true)
   const [gameOver, setGameOver] = useState(false)
   const [gameWon, setGameWon] = useState(false)
   const [attemptsLeft, setAttemptsLeft] = useState(3)
@@ -57,58 +73,166 @@ export default function SentenceScramblePage() {
   const [redirectCountdown, setRedirectCountdown] = useState(3)
   const [isRedirecting, setIsRedirecting] = useState(false)
 
-  // Game data
-  const [sentences, setSentences] = useState([
-    {
-      original: "The quick brown fox jumps over the lazy dog",
-      hint: "A sentence containing all letters of the alphabet",
-      words: [] as Word[],
-      completed: false,
-    },
-    {
-      original: "Actions speak louder than words",
-      hint: "A common proverb about behavior vs. speech",
-      words: [] as Word[],
-      completed: false,
-    },
-    {
-      original: "Time flies when you are having fun",
-      hint: "A saying about how enjoyment affects our perception",
-      words: [] as Word[],
-      completed: false,
-    },
-  ])
+  // Game data state
+  const [gameData, setGameData] = useState<GameData | null>(null)
+  const [sentences, setSentences] = useState<Sentence[]>([])
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0)
   const [words, setWords] = useState<Word[]>([])
+  const [progress, setProgress] = useState({
+    sentencesCompleted: 0,
+    streak: 0
+  })
 
-  // Initialize the game
+  // Game data fetching
+  const { data: dailyGameData, isLoading: isLoadingGameData } = trpc.games.getDailyGame.useQuery(
+    { type: "sentence-scramble" },
+    {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      onSuccess: (data) => {
+        if (data?.game) {
+          setGameData(data.game);
+          
+          if (data.game.sentences && data.game.sentences.length > 0) {
+            // Convert API data to our format
+            const formattedSentences: Sentence[] = data.game.sentences.map((s) => ({
+              original: s.original,
+              hint: s.hint || `Rearrange the words to form a proper English sentence`,
+              words: s.original.split(" ").map((word, i) => ({
+                id: `word-${i}`,
+                text: word,
+              })),
+              completed: false
+            }));
+            
+            setSentences(formattedSentences);
+            
+            // Initialize the first sentence
+            const firstSentence = formattedSentences[0];
+            if (firstSentence) {
+              // Create a shuffled copy of the words
+              const shuffled = [...firstSentence.words].sort(() => Math.random() - 0.5);
+              setWords(shuffled);
+            }
+          }
+          setIsLoading(false);
+        }
+      },
+      onError: () => {
+        // Fallback to default sentences
+        const defaultSentences: Sentence[] = [
+          {
+            original: "The quick brown fox jumps over the lazy dog",
+            hint: "A sentence containing all letters of the alphabet",
+            words: [],
+            completed: false,
+          },
+          {
+            original: "Actions speak louder than words",
+            hint: "A common proverb about behavior vs. speech",
+            words: [],
+            completed: false,
+          },
+          {
+            original: "Time flies when you are having fun",
+            hint: "A saying about how enjoyment affects our perception",
+            words: [],
+            completed: false,
+          },
+        ];
+        
+        // Initialize word arrays for each sentence
+        const initializedSentences = defaultSentences.map(sentence => ({
+          ...sentence,
+          words: sentence.original.split(" ").map((word, i) => ({
+            id: `word-${i}`,
+            text: word,
+          }))
+        }));
+        
+        setSentences(initializedSentences);
+        
+        // Initialize the first sentence words
+        const shuffled = [...initializedSentences[0].words].sort(() => Math.random() - 0.5);
+        setWords(shuffled);
+        setIsLoading(false);
+      }
+    }
+  );
+
+  // User stats fetching
+  const { data: userStats } = trpc.userProcess.getGameStats.useQuery(
+    undefined,
+    {
+      onSuccess: (data) => {
+        if (data) {
+          setProgress({
+            sentencesCompleted: data.sentencesCompleted || 0,
+            streak: data.streak || 0,
+          });
+        }
+      }
+    }
+  );
+
+  // Mutation to add experience when winning
+  const addExperienceMutation = trpc.userProcess.addExperience.useMutation({
+    onSuccess: (data) => {
+      toast({
+        title: "Experience gained!",
+        description: `You earned 50 XP for completing the sentence challenge!`,
+        variant: "success"
+      });
+    },
+    onError: (error) => {
+      console.error("Error adding experience:", error);
+    }
+  });
+
+  // Track game completion in user stats
+  const completeGameMutation = trpc.userProcess.completeGame.useMutation({
+    onSuccess: (data) => {
+      if (data?.sentencesCompleted !== undefined) {
+        setProgress({
+          sentencesCompleted: data.sentencesCompleted,
+          streak: data.streak || progress.streak,
+        });
+      }
+    }
+  });
+
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      // Initialize the first sentence
-      initializeSentence(0)
-      setIsLoading(false)
-    }, 1500)
-
-    return () => clearTimeout(timer)
-  }, [])
+    // Ensure game is loaded
+    if (!isLoadingGameData && sentences.length > 0) {
+      setIsLoading(false);
+    }
+  }, [isLoadingGameData, sentences]);
 
   // Initialize a sentence by scrambling its words
   const initializeSentence = (index: number) => {
-    const sentence = sentences[index]
-    const wordArray = sentence.original.split(" ").map((word, i) => ({
-      id: `word-${i}`,
-      text: word,
-    }))
-
-    // Shuffle the words
-    const shuffled = [...wordArray].sort(() => Math.random() - 0.5)
-
-    // Update the sentence words and current words state
-    const updatedSentences = [...sentences]
-    updatedSentences[index].words = wordArray
-    setSentences(updatedSentences)
-    setWords(shuffled)
+    if (!sentences[index]) return;
+    
+    const sentence = sentences[index];
+    
+    // If the words array isn't initialized yet, do that first
+    if (sentence.words.length === 0) {
+      const wordArray = sentence.original.split(" ").map((word, i) => ({
+        id: `word-${i}`,
+        text: word,
+      }));
+      
+      // Update the sentence words
+      const updatedSentences = [...sentences];
+      updatedSentences[index].words = wordArray;
+      setSentences(updatedSentences);
+      
+      // Shuffle the words
+      const shuffled = [...wordArray].sort(() => Math.random() - 0.5);
+      setWords(shuffled);
+    } else {
+      // Just shuffle the existing words
+      const shuffled = [...sentence.words].sort(() => Math.random() - 0.5);
+      setWords(shuffled);
+    }
   }
 
   // Handle checking the sentence
@@ -138,6 +262,10 @@ export default function SentenceScramblePage() {
           setGameWon(false)
         }, 2000)
       } else {
+        // Award XP and update completion status for the whole game when all sentences are completed
+        addExperienceMutation.mutate({ amount: 50, source: "daily_game" });
+        completeGameMutation.mutate({ gameType: "sentence-scramble" });
+        
         setGameOver(true)
         // Start the redirect countdown after a short delay
         setTimeout(() => {
@@ -193,7 +321,24 @@ export default function SentenceScramblePage() {
     setSentences(updatedSentences)
   }
 
-  const currentSentence = sentences[currentSentenceIndex]
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-game-background to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-game-accent">Loading today's sentence challenge...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Safe access to current sentence
+  const currentSentence = sentences[currentSentenceIndex] || {
+    original: "",
+    hint: "",
+    words: [],
+    completed: false,
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-game-background to-white">
@@ -353,14 +498,21 @@ export default function SentenceScramblePage() {
                     >
                       <Alert
                         className={`${
-                          gameWon
+                          gameWon && gameOver
                             ? "bg-green-50 border-green-200 text-green-700"
                             : gameOver
                               ? "bg-red-50 border-red-200 text-red-700"
-                              : "bg-blue-50 border-blue-200 text-blue-700"
+                              : gameWon
+                                ? "bg-green-50 border-green-200 text-green-700"
+                                : "bg-blue-50 border-blue-200 text-blue-700"
                         } rounded-xl`}
                       >
-                        <AlertDescription>{message}</AlertDescription>
+                        <AlertDescription>
+                          {message}
+                          {gameWon && gameOver && (
+                            <span className="ml-2 font-semibold">+50 XP</span>
+                          )}
+                        </AlertDescription>
                       </Alert>
                     </motion.div>
                   )}
@@ -462,6 +614,54 @@ export default function SentenceScramblePage() {
                       </div>
                     ))}
                   </div>
+                  
+                  {/* Stats display */}
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <motion.div
+                      className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100"
+                      whileHover={{ y: -5, backgroundColor: "rgba(59, 130, 246, 0.05)" }}
+                    >
+                      <motion.div
+                        className="text-2xl font-bold text-blue-500"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+                      >
+                        {progress.sentencesCompleted}
+                      </motion.div>
+                      <div className="text-sm text-game-accent/70">Completed</div>
+                    </motion.div>
+                    <motion.div
+                      className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100"
+                      whileHover={{ y: -5, backgroundColor: "rgba(59, 130, 246, 0.05)" }}
+                    >
+                      <motion.div
+                        className="text-2xl font-bold text-blue-500"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200, delay: 0.3 }}
+                      >
+                        {progress.streak}
+                      </motion.div>
+                      <div className="text-sm text-game-accent/70">Day Streak</div>
+                    </motion.div>
+                  </div>
+                  
+                  {/* Experience reward highlight */}
+                  <motion.div
+                    className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    <h3 className="font-medium text-blue-700 flex items-center justify-center">
+                      <Sparkles className="h-4 w-4 mr-1" />
+                      Reward
+                    </h3>
+                    <p className="text-sm text-blue-600">
+                      Complete this challenge for <span className="font-bold">50 XP</span>
+                    </p>
+                  </motion.div>
 
                   <div className="pt-2">
                     <h3 className="text-sm font-medium mb-2">How to Play</h3>

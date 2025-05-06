@@ -55,6 +55,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import AddToReviewButton from "@/components/add-to-review-button";
 
 // Đăng ký plugins
 dayjs.extend(relativeTime);
@@ -131,10 +132,10 @@ export default function LearnedGrammarPage() {
 
   // Lấy danh sách nội dung ngữ pháp đã học
   const {
-    data: learnedGrammarData = { grammarContents: [], total: 0 },
+    data: learnedGrammarData = { grammars: [], total: 0 },
     isLoading: isGrammarContentsLoading,
     refetch: refetchGrammarContents,
-  } = trpc.userLearnedWords.getLearnedGrammar.useQuery(
+  } = trpc.userLearnedGrammar.getLearnedGrammar.useQuery(
     {
       page: currentPage,
       limit: 10,
@@ -147,7 +148,7 @@ export default function LearnedGrammarPage() {
     }
   );
 
-  const filteredGrammarContents = learnedGrammarData.grammarContents || [];
+  const filteredGrammarContents = learnedGrammarData.grammars || [];
   const totalItems = learnedGrammarData.total || 0;
   const totalPages = Math.ceil(totalItems / 10);
 
@@ -258,7 +259,7 @@ export default function LearnedGrammarPage() {
               <div className="flex items-center space-x-2">
                 <BookOpen className="h-5 w-5 text-game-primary" />
                 <span className="text-2xl font-bold text-game-primary">
-                  {filteredGrammarContents.length}
+                  {totalItems}
                 </span>
               </div>
             </CardContent>
@@ -368,6 +369,19 @@ export default function LearnedGrammarPage() {
                       >
                         <Eye className="h-4 w-4" />
                         Xem
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-amber-500 hover:bg-amber-500 hover:text-white"
+                        onClick={() =>
+                          router.push(
+                            `/grammar/learn/${grammar.categoryId}?grammarId=${grammar.contentId}`
+                          )
+                        }
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        Ôn tập
                       </Button>
                     </div>
                   </CardContent>
@@ -629,6 +643,19 @@ export default function LearnedGrammarPage() {
                 onClick={() => setShowPreviewDialog(false)}
               >
                 Đóng
+              </Button>
+              <AddToReviewButton grammarId={previewGrammar?.contentId} />
+              <Button
+                className="gap-2 bg-amber-500 text-white hover:bg-amber-600"
+                onClick={() => {
+                  setShowPreviewDialog(false);
+                  router.push(
+                    `/grammar/learn/${previewGrammar?.categoryId}?grammarId=${previewGrammar?.contentId}`
+                  );
+                }}
+              >
+                <BookOpen className="h-4 w-4" />
+                Ôn tập ngay
               </Button>
               <Button
                 className="game-button"

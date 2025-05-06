@@ -31,6 +31,7 @@ model User {
   userLearningAnswers  UserLearningAnswer[]
   userReviewWords      UserReviewWord[]
   userReviewGrammars   UserReviewGrammar[]
+  userGameCompletions  UserGameCompletion[]
 
   @@map("users")
   @@schema("public")
@@ -286,5 +287,19 @@ model LeaderboardEntry {
   @@unique([leaderboardId, userId])
   @@index([userId])
   @@map("leaderboard_entries")
+  @@schema("public")
+}
+
+model UserGameCompletion {
+  id         Int       @id @default(autoincrement())
+  userId     String    @map("user_id") @db.Uuid
+  gameType   String    @map("game_type")
+  score      Int?      
+  timeTaken  Int?      @map("time_taken")
+  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+  user       User      @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_game_completions")
   @@schema("public")
 }

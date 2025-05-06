@@ -251,7 +251,7 @@ export default function ProfilePage() {
 
   // Get next level points needed
   const totalPoints = profile.totalPoints || 0;
-  const pointsToNextLevel = 1000 - (totalPoints % 1000);
+  const pointsToNextLevel = 2000 - (totalPoints % 1000);
   const currentLevelProgress = (totalPoints % 1000) / 10; // Convert to percentage
 
   // Filter vocab and grammar achievements
@@ -416,7 +416,7 @@ export default function ProfilePage() {
                     {grammarRulesLearned}
                   </div>
                   <p className="text-sm text-game-accent/70">
-                    Quy tắc ngữ pháp đã học
+                    Điểm ngữ pháp đã học
                   </p>
                 </CardContent>
               </Card>

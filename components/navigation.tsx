@@ -65,6 +65,7 @@ export default function Navigation() {
     { href: "/dashboard", label: "Trang chủ", icon: Home },
     { href: "/vocabulary", label: "Từ vựng", icon: BookText },
     { href: "/grammar", label: "Ngữ pháp", icon: Brain },
+    { href: "/review-session", label: "Ôn tập", icon: Sparkles },
     { href: "/daily-games", label: "Trò chơi hàng ngày", icon: Calendar },
     { href: "/achievements", label: "Thành tích", icon: Crown },
     { href: "/profile", label: "Hồ sơ", icon: User },
