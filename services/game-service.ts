@@ -1,37 +1,39 @@
+import { trpc } from "@/trpc/client";
+
 // Define proper types
 export interface GameWord {
-  word: string
-  definition: string
-  found: boolean
+  word: string;
+  definition: string;
+  found: boolean;
 }
 
 export interface Game {
-  id: number
-  title: string
-  description: string
-  type: "word-search" | "matching" | "quiz"
-  difficulty: string
-  courseId: number
-  courseTitle: string
-  totalWords: number
-  progress: number
-  lastPlayed: string | null
-  timeLimit: number
-  words: GameWord[]
+  id: number;
+  title: string;
+  description: string;
+  type: "word-search" | "matching" | "quiz";
+  difficulty: string;
+  courseId: number;
+  courseTitle: string;
+  totalWords: number;
+  progress: number;
+  lastPlayed: string | null;
+  timeLimit: number;
+  words: GameWord[];
 }
 
 export interface GameListItem {
-  id: number
-  title: string
-  description: string
-  type: "word-search" | "matching" | "quiz"
-  difficulty: string
-  courseId: number
-  courseTitle: string
-  totalWords: number
-  progress: number
-  lastPlayed: string | null
-  timeLimit: number
+  id: number;
+  title: string;
+  description: string;
+  type: "word-search" | "matching" | "quiz";
+  difficulty: string;
+  courseId: number;
+  courseTitle: string;
+  totalWords: number;
+  progress: number;
+  lastPlayed: string | null;
+  timeLimit: number;
 }
 
 // Sample data for vocabulary games
@@ -105,9 +107,22 @@ const gamesData: Game[] = [
       { word: "FRIEND", definition: "bạn bè", found: false },
     ],
   },
-]
+];
 
-// Get list of games without the words (for performance)
+/**
+ * Get list of games without the words (for performance)
+ *
+ * Trong tương lai, hàm này sẽ gọi API để lấy danh sách trò chơi từ server
+ * Ví dụ:
+ * ```
+ * const { data = [] } = await trpc.vocabularyGame.getAll.useQuery();
+ * return data.map(game => ({
+ *   id: game.id,
+ *   title: game.title,
+ *   ...
+ * }));
+ * ```
+ */
 export const getGamesList = (): GameListItem[] => {
   return gamesData.map(
     ({
@@ -134,12 +149,20 @@ export const getGamesList = (): GameListItem[] => {
       progress,
       lastPlayed,
       timeLimit,
-    }),
-  )
-}
+    })
+  );
+};
 
-// Get a specific game by ID
+/**
+ * Get a specific game by ID
+ *
+ * Trong tương lai, hàm này sẽ gọi API để lấy thông tin chi tiết trò chơi từ server
+ * Ví dụ:
+ * ```
+ * const { data } = await trpc.vocabularyGame.getById.useQuery({ gameId: id });
+ * return data;
+ * ```
+ */
 export const getGameById = (id: number): Game | undefined => {
-  return gamesData.find((game) => game.id === id)
-}
-
+  return gamesData.find((game) => game.id === id);
+};

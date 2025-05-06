@@ -1,0 +1,41 @@
+import {
+  Trophy,
+  BookOpen,
+  BookText,
+  Brain,
+  Gamepad2,
+  MessageSquare,
+  Pencil,
+  Flame,
+  Calendar,
+  Award,
+  Star,
+  Clock,
+  GraduationCap,
+  Target,
+  Medal,
+  Crown,
+  Zap,
+} from "lucide-react";
+
+// Map of icon names to Lucide components
+export const iconMap: Record<string, any> = {
+  BookOpen,
+  BookText,
+  Brain,
+  Gamepad2,
+  MessageSquare,
+  Pencil,
+  Trophy,
+  Flame,
+  Calendar,
+  Award,
+  Star,
+  Clock,
+  GraduationCap,
+  Target,
+  Medal,
+  Crown,
+  Zap,
+  // Thêm các icon khác nếu cần
+};

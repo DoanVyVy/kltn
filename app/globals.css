@@ -107,3 +107,53 @@
   @apply opacity-100;
 }
 
+/* CSS cho hiệu ứng flip card */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Hiệu ứng chuyển động mượt */
+.flippable-card {
+  position: relative;
+  width: 100%;
+  min-height: 550px;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-front,
+.card-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 550px;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.card-back {
+  transform: rotateY(180deg);
+}
+
+.flipped .card-front {
+  transform: rotateY(180deg);
+}
+
+.flipped .card-back {
+  transform: rotateY(0);
+}

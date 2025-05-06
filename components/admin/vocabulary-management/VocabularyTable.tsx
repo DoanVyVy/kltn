@@ -1,156 +1,241 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { type VocabularyWordListElement } from "@/routers/vocabulary_word.route";
-import { Pencil, Trash2, Volume2 } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Volume2,
+  Image,
+  Video,
+  HelpCircle,
+  Edit,
+  Play,
+} from "lucide-react";
 import React from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { VocabularyWord } from "@prisma/client";
 
 interface VocabularyTableProps {
-	vocabulary: VocabularyWordListElement[] | undefined;
-	isLoading: boolean;
-	openEditDialog: (word: VocabularyWordListElement) => void;
-	openDeleteDialog: (word: VocabularyWordListElement) => void;
-	playAudio: (url: string) => void;
-	page: number;
-	setPage: React.Dispatch<React.SetStateAction<number>>;
-	limit: number;
+  vocabularies: VocabularyWord[];
+  isLoading: boolean;
+  onEdit: (vocabulary: VocabularyWord) => void;
+  onDelete: (vocabulary: VocabularyWord) => void;
+  onPlayAudio: (url: string) => void;
+  isPlaying: boolean;
+  currentUrl: string | null;
 }
 
 export default function VocabularyTable({
-	vocabulary,
-	isLoading,
-	openEditDialog,
-	openDeleteDialog,
-	playAudio,
-	page,
-	setPage,
-	limit,
+  vocabularies,
+  isLoading,
+  onEdit,
+  onDelete,
+  onPlayAudio,
+  isPlaying,
+  currentUrl,
 }: VocabularyTableProps) {
-	return (
-		<Card>
-			<CardContent className="p-0">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead>Id</TableHead>
-							<TableHead>Từ vựng</TableHead>
-							<TableHead>Phiên âm</TableHead>
-							<TableHead>Khóa học</TableHead>
-							<TableHead>Định nghĩa</TableHead>
-							<TableHead className="text-right">
-								Thao tác
-							</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{isLoading ? (
-							<TableRow>
-								<TableCell
-									colSpan={5}
-									className="text-center py-8"
-								>
-									Đang tải dữ liệu...
-								</TableCell>
-							</TableRow>
-						) : vocabulary && vocabulary.length > 0 ? (
-							vocabulary.map((word) => (
-								<TableRow key={word.wordId}>
-									<TableCell>{word.wordId}</TableCell>
-									<TableCell className="font-medium">
-										<div className="flex items-center gap-2">
-											{word.word}
-											{word.audioUrl && (
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
-													onClick={() =>
-														playAudio(
-															word.audioUrl || ""
-														)
-													}
-												>
-													<Volume2 size={14} />
-												</Button>
-											)}
-										</div>
-									</TableCell>
-									<TableCell>{word.pronunciation}</TableCell>
-									<TableCell>
-										{word.category?.categoryName ||
-											"Chưa phân loại"}
-									</TableCell>
-									<TableCell className="max-w-xs truncate">
-										{word.definition}
-									</TableCell>
-									<TableCell className="text-right">
-										<div className="flex justify-end gap-2">
-											<Button
-												variant="outline"
-												size="icon"
-												onClick={() =>
-													openEditDialog(word)
-												}
-											>
-												<Pencil size={16} />
-											</Button>
-											<Button
-												variant="outline"
-												size="icon"
-												onClick={() =>
-													openDeleteDialog(word)
-												}
-											>
-												<Trash2 size={16} />
-											</Button>
-										</div>
-									</TableCell>
-								</TableRow>
-							))
-						) : (
-							<TableRow>
-								<TableCell
-									colSpan={5}
-									className="text-center py-8"
-								>
-									Không tìm thấy từ vựng nào
-								</TableCell>
-							</TableRow>
-						)}
-					</TableBody>
-				</Table>
+  if (isLoading) {
+    return <div>Đang tải...</div>;
+  }
 
-				{vocabulary && vocabulary.length > 0 && (
-					<div className="flex items-center justify-end p-4 space-x-2 border-t">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() =>
-								setPage((prev) => Math.max(prev - 1, 1))
-							}
-							disabled={page === 1}
-						>
-							Trang trước
-						</Button>
-						<span className="mx-2">Trang {page}</span>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => setPage((prev) => prev + 1)}
-							disabled={vocabulary.length < limit}
-						>
-							Trang tiếp
-						</Button>
-					</div>
-				)}
-			</CardContent>
-		</Card>
-	);
+  if (!vocabularies || vocabularies.length === 0) {
+    return <div>Không có từ vựng nào</div>;
+  }
+
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">
+                    Từ vựng
+                  </TooltipTrigger>
+                  <TooltipContent>Từ vựng tiếng Anh cần học</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">
+                    Phát âm
+                  </TooltipTrigger>
+                  <TooltipContent>Cách phát âm của từ vựng</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">
+                    Loại từ
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Loại từ của từ vựng (danh từ, động từ, tính từ...)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Nghĩa</TooltipTrigger>
+                  <TooltipContent>Nghĩa tiếng Việt của từ vựng</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Ví dụ</TooltipTrigger>
+                  <TooltipContent>Câu ví dụ sử dụng từ vựng</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">
+                    Khóa học
+                  </TooltipTrigger>
+                  <TooltipContent>Khóa học chứa từ vựng này</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+            <TableHead>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">
+                    Thao tác
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Các thao tác có thể thực hiện với từ vựng
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {vocabularies.map((vocabulary) => (
+            <TableRow key={vocabulary.wordId}>
+              <TableCell>{vocabulary.word}</TableCell>
+              <TableCell>{vocabulary.pronunciation}</TableCell>
+              <TableCell>{vocabulary.partOfSpeech}</TableCell>
+              <TableCell>{vocabulary.definition}</TableCell>
+              <TableCell>{vocabulary.exampleSentence}</TableCell>
+              <TableCell>{vocabulary.category?.categoryName}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onPlayAudio(vocabulary.audioUrl || "")}
+                          className={
+                            isPlaying && currentUrl === vocabulary.audioUrl
+                              ? "text-blue-500"
+                              : ""
+                          }
+                        >
+                          <Play className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Nghe phát âm</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  {vocabulary.imageUrl && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" asChild>
+                            <a
+                              href={vocabulary.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Image className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Xem hình ảnh</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+
+                  {vocabulary.videoUrl && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" asChild>
+                            <a
+                              href={vocabulary.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Video className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Xem video</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEdit(vocabulary)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Sửa</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDelete(vocabulary)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Xóa</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }
