@@ -14,6 +14,11 @@ export interface PronunciationFeedback {
   wordAnalysis?: WordAnalysis[];
   transcribedText?: string;
   originalText?: string;
+  audioUrl?: string;
+  prompt?: {
+    text: string;
+    type: string;
+  };
 }
 
 export interface WordAnalysis {

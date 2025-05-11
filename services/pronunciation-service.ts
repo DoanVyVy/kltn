@@ -38,9 +38,7 @@ export class PronunciationService {
   public setRealisticTranscription(enable: boolean): void {
     this.useRealisticTranscription = enable;
     console.log(
-      `Realistic transcription simulation ${
-        enable ? "enabled" : "disabled"
-      }`
+      `Realistic transcription simulation ${enable ? "enabled" : "disabled"}`
     );
   }
 
@@ -479,25 +477,23 @@ export class PronunciationService {
           );
 
           // Use a timeout to prevent hanging
-          const timeoutPromise = new Promise<TranscriptionResult>(
-            (resolve) => {
-              setTimeout(() => {
-                console.log("Recognition timeout, using server API...");
-                // If we time out, try the server API
-                this.fallbackToServerAPI(audioBlob, referenceText, language)
-                  .then((result) => resolve(result))
-                  .catch(() => {
-                    resolve({
-                      transcript: referenceText || "",
-                      confidence: 0.3,
-                      success: false,
-                      error: "web_speech_timeout",
-                      source: "timeout_fallback",
-                    });
+          const timeoutPromise = new Promise<TranscriptionResult>((resolve) => {
+            setTimeout(() => {
+              console.log("Recognition timeout, using server API...");
+              // If we time out, try the server API
+              this.fallbackToServerAPI(audioBlob, referenceText, language)
+                .then((result) => resolve(result))
+                .catch(() => {
+                  resolve({
+                    transcript: referenceText || "",
+                    confidence: 0.3,
+                    success: false,
+                    error: "web_speech_timeout",
+                    source: "timeout_fallback",
                   });
-              }, 10000); // 10-second timeout
-            }
-          );
+                });
+            }, 10000); // 10-second timeout
+          });
 
           // Race between recognition and timeout
           return Promise.race([recognitionPromise, timeoutPromise]);
@@ -663,7 +659,10 @@ export class PronunciationService {
   /**
    * Find a similar word in the reference text
    */
-  private findSimilarWord(word: string, referenceWords: string[]): string | null {
+  private findSimilarWord(
+    word: string,
+    referenceWords: string[]
+  ): string | null {
     // Simple implementation - just find words starting with the same letter
     const candidates = referenceWords.filter(
       (refWord) =>
@@ -695,8 +694,11 @@ export class PronunciationService {
       case 2: // Character insertion
         const insertPos = Math.floor(Math.random() * (word.length - 1)) + 1;
         const insertChars = "aeiou"; // Vowels are common insertion errors
-        const insertChar = insertChars[Math.floor(Math.random() * insertChars.length)];
-        return word.substring(0, insertPos) + insertChar + word.substring(insertPos);
+        const insertChar =
+          insertChars[Math.floor(Math.random() * insertChars.length)];
+        return (
+          word.substring(0, insertPos) + insertChar + word.substring(insertPos)
+        );
 
       default:
         return word;
@@ -789,13 +791,87 @@ export class PronunciationService {
   }
 
   /**
+   * Process the response from the pronunciation assessment API
+   */
+  private async processAssessmentResponse(
+    response: Response,
+    processedAudio: Blob,
+    referenceText: string,
+    recognizedText: string = "",
+    promptType: string = "sentence"
+  ): Promise<PronunciationFeedback> {
+    const responseData = await response.json();
+    console.log("Assessment data received:", responseData);
+
+    if (responseData.status !== "success") {
+      throw new Error(responseData.error || "Unknown assessment error");
+    }
+
+    // Map the new API response to our expected format
+    const assessment = responseData.assessment;
+    const assessData = {
+      transcript: assessment.transcription || recognizedText,
+      accuracy: assessment.accuracy || 0,
+      fluency: assessment.fluency || 0,
+      completeness: assessment.completeness || 0,
+      pronunciation: assessment.overall_score || 0,
+      words: assessment.word_analysis || [],
+    };
+
+    // We'll use the feedback directly from the new API
+    const feedbackDetails = {
+      transcript: assessData.transcript,
+      referenceText,
+      text: assessment.feedback || "",
+      points: assessment.improvement_points || [],
+      overall: assessment.overall_score || 0,
+    };
+
+    // Build word analysis from assessment data
+    const wordAnalysis = assessData.words.map((word: any) => ({
+      word: word.Word || word.word,
+      correctlyPronounced: word.ErrorType === "None" || word.correct === true,
+      feedback: `${word.AccuracyScore || word.score || 0}% accuracy. ${
+        word.ErrorType !== "None" || word.correct === false
+          ? "Try to improve this sound."
+          : "Well pronounced!"
+      }`,
+    }));
+
+    // Store the last audio URL for playback
+    this.lastAudioUrl = URL.createObjectURL(processedAudio);
+
+    // Return combined feedback
+    return {
+      overall: assessData.pronunciation,
+      details: {
+        accuracy: assessData.accuracy,
+        fluency: assessData.fluency,
+        prosody: assessData.completeness, // Using completeness as prosody score
+        textMatch: assessData.accuracy, // Using accuracy as text match score
+      },
+      feedback:
+        feedbackDetails.points.length > 0
+          ? feedbackDetails.points
+          : this.parseFeedback(feedbackDetails.text),
+      wordAnalysis,
+      transcribedText: assessData.transcript,
+      originalText: referenceText,
+      audioUrl: this.lastAudioUrl,
+      prompt: {
+        text: responseData.prompt?.text || referenceText,
+        type: responseData.prompt?.type || promptType,
+      },
+    };
+  }
+
+  /**
    * Evaluate pronunciation using the assess API
    * @param audioBlob Audio recording to assess
    * @param referenceText Text the user is trying to pronounce
    * @param recognizedText Speech-to-text result from transcription
    * @param language Language code (default: en)
-   */
-  async evaluatePronunciation(
+   */ async evaluatePronunciation(
     audioBlob: Blob,
     referenceText: string,
     recognizedText: string = "",
@@ -805,86 +881,41 @@ export class PronunciationService {
       console.log("Processing audio for assessment...");
       const processedAudio = await this.processAudio(audioBlob);
 
-      // Convert to base64
-      const audioBase64 = await this.audioToBase64(processedAudio);
+      // Create FormData for the new API
+      const formData = new FormData();
+      formData.append("audio", processedAudio);
+      formData.append("prompt", referenceText);
 
+      // Determine prompt type (word, sentence, or paragraph) based on length and structure
+      let promptType = "sentence";
+      if (referenceText.split(" ").length === 1) {
+        promptType = "word";
+      } else if (
+        referenceText.split(" ").length > 15 ||
+        referenceText.includes(".")
+      ) {
+        promptType = "paragraph";
+      }
+      formData.append("prompt_type", promptType);
       console.log("Sending to pronunciation assessment API...");
-      const assessResponse = await fetch("/api/assess", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          audioBase64,
-          referenceText,
-          recognizedText,
-          language,
-        }),
-      });
-
+      const assessResponse = await fetch(
+        "http://192.168.1.12:5000/pronunciation-assessment",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
       if (!assessResponse.ok) {
         throw new Error(`Assessment API error: ${assessResponse.status}`);
       }
 
-      const assessData = await assessResponse.json();
-      console.log("Assessment data received:", assessData);
-
-      // Request detailed feedback based on the assessment
-      console.log("Getting detailed feedback...");
-      const feedbackResponse = await fetch("/api/feedback", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          transcript: recognizedText || assessData.transcript,
-          referenceText,
-          scores: {
-            accuracy: assessData.accuracy,
-            fluency: assessData.fluency,
-            completeness: assessData.completeness,
-            pronunciation: assessData.pronunciation,
-          },
-          words: assessData.words,
-          language,
-        }),
-      });
-
-      if (!feedbackResponse.ok) {
-        throw new Error(`Feedback API error: ${feedbackResponse.status}`);
-      }
-
-      const feedbackData = await feedbackResponse.json();
-      console.log("Feedback data received:", feedbackData);
-
-      // Parse the Markdown feedback into structured feedback array
-      const feedbackArray = this.parseFeedback(feedbackData.feedback);
-
-      // Build word analysis from assessment data
-      const wordAnalysis = assessData.words.map((word: any) => ({
-        word: word.Word,
-        correctlyPronounced: word.ErrorType === "None",
-        feedback: `${word.AccuracyScore}% accuracy. ${
-          word.ErrorType !== "None"
-            ? "Try to improve this sound."
-            : "Well pronounced!"
-        }`,
-      }));
-
-      // Return combined feedback
-      return {
-        overall: assessData.pronunciation,
-        details: {
-          accuracy: assessData.accuracy,
-          fluency: assessData.fluency,
-          prosody: assessData.completeness, // Using completeness as prosody score
-          textMatch: assessData.accuracy, // Using accuracy as text match score
-        },
-        feedback: feedbackArray,
-        wordAnalysis,
-        transcribedText: recognizedText || assessData.transcript,
-        originalText: referenceText,
-      };
+      return await this.processAssessmentResponse(
+        assessResponse,
+        processedAudio,
+        referenceText,
+        recognizedText,
+        promptType
+      );
     } catch (error) {
       console.error("Error evaluating pronunciation:", error);
 
@@ -929,8 +960,7 @@ export class PronunciationService {
         const bulletPoints = improvementSection
           .split("\n")
           .filter(
-            (line) =>
-              line.trim().startsWith("-") || line.trim().startsWith("*")
+            (line) => line.trim().startsWith("-") || line.trim().startsWith("*")
           )
           .map((line) => line.replace(/^[*-]\s*/, "").trim())
           .filter((line) => line.length > 0);
