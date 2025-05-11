@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BookOpen, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,12 @@ import { GrammarReference } from "@/components/grammar/grammar-reference";
 import { useEnhancedGrammarGenerator } from "@/components/grammar/enhanced-grammar-generator";
 import { EnhancedGrammarExercise } from "@/components/grammar/enhanced-grammar-exercise";
 
-export default function GrammarPracticePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function GrammarPracticePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = use(props.params);
   const router = useRouter();
   const { toast } = useToast();
   const categoryId = parseInt(params.id);

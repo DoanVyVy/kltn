@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -165,29 +165,30 @@ const createGridData = (
 
 type Grid = ReturnType<typeof createGridData>;
 
-export default function VocabularyGamePage({
-	params,
-}: {
-	params: { id: string };
-}) {
-	const router = useRouter();
-	const [timeLeft, setTimeLeft] = useState(360);
-	const [gameOver, setGameOver] = useState(false);
-	const [gameCompleted, setGameCompleted] = useState(false);
-	const [score, setScore] = useState(0);
-	const [grid, setGrid] = useState<Grid>([]);
-	const [words, setWords] = useState<Word[]>([]);
-	const [selectedCells, setSelectedCells] = useState<
+export default function VocabularyGamePage(
+    props: {
+        params: Promise<{ id: string }>;
+    }
+) {
+    const params = use(props.params);
+    const router = useRouter();
+    const [timeLeft, setTimeLeft] = useState(360);
+    const [gameOver, setGameOver] = useState(false);
+    const [gameCompleted, setGameCompleted] = useState(false);
+    const [score, setScore] = useState(0);
+    const [grid, setGrid] = useState<Grid>([]);
+    const [words, setWords] = useState<Word[]>([]);
+    const [selectedCells, setSelectedCells] = useState<
 		{ id: string; row: number; col: number }[]
 	>([]);
-	const [currentWord, setCurrentWord] = useState("");
-	const [message, setMessage] = useState<{
+    const [currentWord, setCurrentWord] = useState("");
+    const [message, setMessage] = useState<{
 		text: string;
 		type: "success" | "error" | "info";
 	} | null>(null);
-	const [isDragging, setIsDragging] = useState(false);
-	const [showHint, setShowHint] = useState(false);
-	const { data, isLoading: isDataLoading } = useQuery<
+    const [isDragging, setIsDragging] = useState(false);
+    const [showHint, setShowHint] = useState(false);
+    const { data, isLoading: isDataLoading } = useQuery<
 		(CollectionDetail & {
 			word: VocabularyWord;
 		})[]
@@ -198,7 +199,7 @@ export default function VocabularyGamePage({
 				res.json()
 			),
 	});
-	function reset() {
+    function reset() {
 		if (!data) return;
 		setWords(
 			data.map((word) => ({
@@ -219,15 +220,15 @@ export default function VocabularyGamePage({
 		);
 		setTimeLeft(360);
 	}
-	React.useEffect(() => {
+    React.useEffect(() => {
 		if (!data) return;
 		reset();
 	}, [data]);
 
-	const gridRef = useRef<HTMLDivElement>(null);
+    const gridRef = useRef<HTMLDivElement>(null);
 
-	// Đếm ngược thời gian
-	useEffect(() => {
+    // Đếm ngược thời gian
+    useEffect(() => {
 		if (gameOver || gameCompleted) return;
 
 		const timer = setInterval(() => {
@@ -244,15 +245,15 @@ export default function VocabularyGamePage({
 		return () => clearInterval(timer);
 	}, [gameOver, gameCompleted]);
 
-	// Kiểm tra xem trò chơi đã hoàn thành chưa
-	useEffect(() => {
+    // Kiểm tra xem trò chơi đã hoàn thành chưa
+    useEffect(() => {
 		if (words!.every((word) => word.found)) {
 			setGameCompleted(true);
 		}
 	}, [words]);
 
-	// Hiển thị thông báo trong 2 giây
-	useEffect(() => {
+    // Hiển thị thông báo trong 2 giây
+    useEffect(() => {
 		if (message) {
 			const timer = setTimeout(() => {
 				setMessage(null);
@@ -262,8 +263,8 @@ export default function VocabularyGamePage({
 		}
 	}, [message]);
 
-	// Xử lý khi người dùng bắt đầu kéo
-	const handleMouseDown = (cellId: string, row: number, col: number) => {
+    // Xử lý khi người dùng bắt đầu kéo
+    const handleMouseDown = (cellId: string, row: number, col: number) => {
 		if (gameOver || gameCompleted) return;
 
 		setIsDragging(true);
@@ -271,8 +272,8 @@ export default function VocabularyGamePage({
 		setCurrentWord(grid[row][col].letter);
 	};
 
-	// Xử lý khi người dùng di chuyển chuột
-	const handleMouseEnter = (cellId: string, row: number, col: number) => {
+    // Xử lý khi người dùng di chuyển chuột
+    const handleMouseEnter = (cellId: string, row: number, col: number) => {
 		if (!isDragging || gameOver || gameCompleted) return;
 
 		// Kiểm tra xem ô đã được chọn chưa
@@ -290,8 +291,8 @@ export default function VocabularyGamePage({
 		}
 	};
 
-	// Xử lý khi người dùng thả chuột
-	const handleMouseUp = () => {
+    // Xử lý khi người dùng thả chuột
+    const handleMouseUp = () => {
 		if (!isDragging || gameOver || gameCompleted) return;
 
 		setIsDragging(false);
@@ -339,8 +340,8 @@ export default function VocabularyGamePage({
 		setCurrentWord("");
 	};
 
-	// Xử lý khi người dùng rời khỏi lưới
-	const handleMouseLeave = () => {
+    // Xử lý khi người dùng rời khỏi lưới
+    const handleMouseLeave = () => {
 		if (isDragging) {
 			setIsDragging(false);
 			setSelectedCells([]);
@@ -348,15 +349,15 @@ export default function VocabularyGamePage({
 		}
 	};
 
-	// Định dạng thời gian
-	const formatTime = (seconds: number) => {
+    // Định dạng thời gian
+    const formatTime = (seconds: number) => {
 		const mins = Math.floor(seconds / 60);
 		const secs = seconds % 60;
 		return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 	};
 
-	// Hiển thị gợi ý
-	const showRandomHint = () => {
+    // Hiển thị gợi ý
+    const showRandomHint = () => {
 		const unFoundWords = words.filter((word) => !word.found);
 		if (unFoundWords.length === 0) return;
 
@@ -374,8 +375,8 @@ export default function VocabularyGamePage({
 		}, 3000);
 	};
 
-	// Khởi động lại trò chơi
-	const handleRestart = () => {
+    // Khởi động lại trò chơi
+    const handleRestart = () => {
 		setTimeLeft(360);
 		setGameOver(false);
 		setGameCompleted(false);
@@ -387,16 +388,16 @@ export default function VocabularyGamePage({
 		reset();
 	};
 
-	// Kết thúc trò chơi
-	const handleFinish = () => {
+    // Kết thúc trò chơi
+    const handleFinish = () => {
 		router.push(`/vocabulary`);
 	};
 
-	// Tính toán tiến độ
-	const progress =
+    // Tính toán tiến độ
+    const progress =
 		(words.filter((word) => word.found).length / words.length) * 100;
 
-	return (
+    return (
 		<div className="min-h-screen bg-game-background">
 			<Navigation />
 

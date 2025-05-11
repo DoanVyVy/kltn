@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -92,11 +92,12 @@ const createDummySections = (courseTitle: string): Section[] => [
   },
 ];
 
-export default function VocabularyCourseDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function VocabularyCourseDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = use(props.params);
   const router = useRouter();
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [showModeDialog, setShowModeDialog] = useState(false);
