@@ -56,7 +56,7 @@ model Achievement {
   description       String
   iconUrl           String?           @map("icon_url")
   requiredCondition String?           @map("required_condition")
-  pointsReward      Int               @default(0) @map("points_reward")
+  expReward         Int               @default(0) @map("exp_reward")
   userAchievements  UserAchievement[]
 
   @@map("achievements")
@@ -158,7 +158,7 @@ model GameActivity {
   description      String?
   skillFocus       String?        @map("skill_focus")
   difficultyLevel  Int            @default(1) @map("difficulty_level")
-  pointsReward     Int            @default(10) @map("points_reward")
+  expReward        Int            @default(10) @map("exp_reward")
   timeLimitSeconds Int?           @map("time_limit_seconds")
   instructions     String?
   gameType         GameType       @relation(fields: [gameTypeId], references: [gameTypeId], onDelete: Cascade)
@@ -313,7 +313,7 @@ model DailyIdiomChallenge {
   idioms          Json      @db.Json // Array of {phrase, meaning, options, correctOption}
   difficultyLevel Int       @default(1) @map("difficulty_level")
   maxAttempts     Int       @default(5) @map("max_attempts")
-  pointsReward    Int       @default(50) @map("points_reward")
+  expReward       Int       @default(50) @map("exp_reward")
 
   @@unique([date])
   @@map("daily_idiom_challenges")
@@ -326,7 +326,7 @@ model DailySentenceScramble {
   sentences       Json      @db.Json // Array of {original, scrambled, hint}
   difficultyLevel Int       @default(1) @map("difficulty_level")
   maxAttempts     Int       @default(3) @map("max_attempts")
-  pointsReward    Int       @default(50) @map("points_reward")
+  expReward       Int       @default(50) @map("exp_reward")
 
   @@unique([date])
   @@map("daily_sentence_scrambles")
@@ -339,7 +339,7 @@ model DailyWordAssociation {
   wordPairs       Json      @db.Json // Array of {word, match}
   timeLimit       Int       @default(60) @map("time_limit")
   difficultyLevel Int       @default(1) @map("difficulty_level")
-  pointsReward    Int       @default(50) @map("points_reward")
+  expReward       Int       @default(50) @map("exp_reward")
 
   @@unique([date])
   @@map("daily_word_associations")
@@ -353,7 +353,7 @@ model DailyWordGuess {
   clues           Json      @db.Json // Array of clue strings
   maxAttempts     Int       @default(6) @map("max_attempts")
   difficultyLevel Int       @default(1) @map("difficulty_level")
-  pointsReward    Int       @default(50) @map("points_reward")
+  expReward       Int       @default(50) @map("exp_reward")
 
   @@unique([date])
   @@map("daily_word_guesses")
