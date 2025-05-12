@@ -25,7 +25,7 @@ export async function getCurrentUser() {
 	};
 }
 
-export async function getUserId() {
+export async function getCurrentUserId() {
 	const user = await getCurrentUser();
 	if (!user) {
 		return null;
