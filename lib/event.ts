@@ -1,4 +1,4 @@
-export type EventType = "user" | "system" | "error";
+export type EventType = "learned_vocabulary" | "learned_grammar";
 
 export interface IEvent {
 	eventType: EventType;
@@ -21,7 +21,7 @@ class HandlerRegistry<K extends EventType = EventType> {
 		this.handlers[eventType].push(handler);
 	}
 
-	public trigger(event: IEvent) {
+	public async trigger(event: IEvent) {
 		const handlers = this.handlers[event.eventType as K];
 		if (handlers) {
 			handlers.forEach((handler) =>

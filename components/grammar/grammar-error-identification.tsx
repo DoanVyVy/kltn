@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import confetti from "canvas-confetti";
+import { dispatchAppEvent } from "@/events/handlers";
 
 export interface ErrorIdentificationExercise {
   id: string | number;
@@ -61,6 +62,17 @@ export function GrammarErrorIdentification({
     const correct = selectedOptionData?.isError ?? false;
 
     setIsCorrect(correct);
+    if (correct) {
+			dispatchAppEvent({
+				eventType: "learned_grammar",
+				payload: {
+					correct: correct,
+					grammarId: exercise.id,
+					categoryId: exercise.id,
+				},
+				timestamp: new Date(),
+			});
+		}
     setShowResult(true);
     onComplete(correct);
 
