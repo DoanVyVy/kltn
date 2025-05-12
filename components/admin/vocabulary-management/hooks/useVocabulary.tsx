@@ -47,9 +47,8 @@ export default function useVocabulary() {
     refetch();
     setCurrentDialog(null);
   };
-
   return {
-    vocabularies: vocabularies || [],
+    vocabularies: vocabularies?.results || [],
     isLoading,
     currentVocabulary,
     searchTerm,
@@ -60,6 +59,8 @@ export default function useVocabulary() {
     page,
     setPage,
     limit,
+    totalCount: vocabularies?.metadata?.totalCount || 0,
+    pageCount: vocabularies?.metadata?.pageCount || 0,
     openEditDialog,
     openDeleteDialog,
     isOpenEditDialog: currentDialog === "edit",

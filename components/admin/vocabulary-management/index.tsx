@@ -28,6 +28,8 @@ export default function VocabularyManagement() {
     page,
     setPage,
     limit,
+    totalCount,
+    pageCount,
     openEditDialog,
     openDeleteDialog,
     isOpenEditDialog,
@@ -181,7 +183,7 @@ export default function VocabularyManagement() {
           isLoading={isLoading}
           onEdit={openEditDialog}
           onDelete={openDeleteDialog}
-          onPlayAudio={handlePlayAudio}
+          onPlayAudio={(url: string) => handlePlayAudio(url)}
           isPlaying={isPlaying}
           currentUrl={currentUrl}
         />
@@ -196,12 +198,14 @@ export default function VocabularyManagement() {
           >
             Trang trước
           </Button>
-          <span className="mx-2">Trang {page}</span>
+          <span className="mx-2">
+            Trang {page} / {pageCount || 1}
+          </span>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setPage((prev) => prev + 1)}
-            disabled={vocabularies.length < limit}
+            disabled={page >= pageCount}
           >
             Trang tiếp
           </Button>
