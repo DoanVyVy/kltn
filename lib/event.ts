@@ -1,8 +1,11 @@
+import { db } from "@/database";
+
 export type EventType =
 	| "learned_vocabulary"
 	| "learned_grammar"
 	| "exp_gained"
-	| "level_up";
+	| "level_up"
+	| "streak_incremented";
 
 export interface IEvent {
 	eventType: EventType;
@@ -27,6 +30,14 @@ class HandlerRegistry<K extends EventType = EventType> {
 	}
 
 	public async trigger(event: IEvent) {
+		await db.eventStore.create({
+			data: {
+				eventType: event.eventType,
+				createdAt: event.timestamp,
+				eventData: event.payload,
+				userId: event.createdBy!,
+			},
+		});
 		const handlers = this.handlers[event.eventType as K];
 		if (handlers) {
 			handlers.forEach((handler) => handler(event));
