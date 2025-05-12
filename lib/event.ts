@@ -1,12 +1,17 @@
-export type EventType = "learned_vocabulary" | "learned_grammar";
+export type EventType =
+	| "learned_vocabulary"
+	| "learned_grammar"
+	| "exp_gained"
+	| "level_up";
 
 export interface IEvent {
 	eventType: EventType;
 	payload: Record<string, any>;
 	timestamp: Date;
+	createdBy?: string;
 }
 
-export type EventHandler = (payload: Record<string, any>) => void;
+export type EventHandler = (e: IEvent) => void;
 
 class HandlerRegistry<K extends EventType = EventType> {
 	private handlers: Record<K, Array<EventHandler>> = {} as Record<
@@ -24,9 +29,7 @@ class HandlerRegistry<K extends EventType = EventType> {
 	public async trigger(event: IEvent) {
 		const handlers = this.handlers[event.eventType as K];
 		if (handlers) {
-			handlers.forEach((handler) =>
-				handler(event.payload as Record<string, any>)
-			);
+			handlers.forEach((handler) => handler(event));
 		}
 	}
 }
