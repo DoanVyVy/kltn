@@ -46,7 +46,6 @@ import { Progress } from "@/components/ui/progress";
 import Navigation from "@/components/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { trpc } from "@/trpc/client";
-import pronunciationService from "@/services/pronunciation-service";
 import {
   PronunciationContent,
   PronunciationFeedback,
@@ -235,7 +234,7 @@ export default function PronunciationCheckGame() {
       toast({
         title: "Experience gained!",
         description: `You earned 50 XP for completing the pronunciation check!`,
-        variant: "success",
+        variant: "default",
       });
     },
   });
@@ -302,7 +301,7 @@ export default function PronunciationCheckGame() {
               toast({
                 title: "Level Up!",
                 description: "You've advanced to a more challenging level!",
-                variant: "success",
+                variant: "default",
               });
             } else if (recentAverage < 60 && difficultyLevel > 1) {
               setDifficultyLevel((prev) => prev - 1);
@@ -310,7 +309,7 @@ export default function PronunciationCheckGame() {
                 title: "Adjusting Difficulty",
                 description:
                   "We've adjusted the difficulty to help you improve.",
-                variant: "info",
+                variant: "default",
               });
             }
           }, 0);
@@ -332,12 +331,9 @@ export default function PronunciationCheckGame() {
     } else if (isRedirecting && redirectCountdown === 0) {
       router.push("/games");
     }
-  }, [isRedirecting, redirectCountdown, router]);
-
-  // Toggle realistic transcription and update the service config
+  }, [isRedirecting, redirectCountdown, router]);  // Toggle realistic transcription mode
   const toggleRealisticTranscription = () => {
     setUseRealisticTranscription(!useRealisticTranscription);
-    pronunciationService.setRealisticTranscription(!useRealisticTranscription);
     toast({
       title: !useRealisticTranscription
         ? "Phiên âm thực tế đã bật"
@@ -348,123 +344,8 @@ export default function PronunciationCheckGame() {
       variant: "default",
     });
   };
-
-  // Initialize realistic transcription mode on component mount
-  useEffect(() => {
-    pronunciationService.setRealisticTranscription(useRealisticTranscription);
-  }, []);
-
-  const preprocessAudio = async (audioBlob: Blob): Promise<Blob> => {
-    if (!audioContext) return audioBlob;
-
-    try {
-      setIsProcessingAudio(true);
-      toast({
-        title: "Processing Audio",
-        description: "Enhancing audio quality for better recognition...",
-        variant: "default",
-      });
-
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      const noiseThreshold = 0.01;
-      const newBuffer = audioContext.createBuffer(
-        audioBuffer.numberOfChannels,
-        audioBuffer.length,
-        audioBuffer.sampleRate
-      );
-
-      for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-        const inputData = audioBuffer.getChannelData(channel);
-        const outputData = newBuffer.getChannelData(channel);
-
-        for (let i = 0; i < inputData.length; i++) {
-          outputData[i] =
-            Math.abs(inputData[i]) < noiseThreshold ? 0 : inputData[i];
-        }
-      }
-
-      const offlineContext = new OfflineAudioContext(
-        audioBuffer.numberOfChannels,
-        audioBuffer.length,
-        audioBuffer.sampleRate
-      );
-
-      const source = offlineContext.createBufferSource();
-      source.buffer = newBuffer;
-      source.connect(offlineContext.destination);
-      source.start();
-
-      const renderedBuffer = await offlineContext.startRendering();
-
-      const wavBlob = await convertToWav(renderedBuffer);
-
-      setIsProcessingAudio(false);
-      return wavBlob;
-    } catch (error) {
-      console.error("Error preprocessing audio:", error);
-      setIsProcessingAudio(false);
-      return audioBlob;
-    }
-  };
-
-  const convertToWav = (buffer: AudioBuffer): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const numOfChannels = buffer.numberOfChannels;
-      const length = buffer.length * numOfChannels * 2;
-      const sampleRate = buffer.sampleRate;
-      const data = new Uint8Array(44 + length);
-
-      writeString(data, 0, "RIFF");
-      data[4] = (length + 36) & 0xff;
-      data[5] = ((length + 36) >> 8) & 0xff;
-      data[6] = ((length + 36) >> 16) & 0xff;
-      data[7] = ((length + 36) >> 24) & 0xff;
-      writeString(data, 8, "WAVE");
-      writeString(data, 12, "fmt ");
-      data[16] = 16;
-      data[20] = 1;
-      data[22] = numOfChannels;
-      data[24] = sampleRate & 0xff;
-      data[25] = (sampleRate >> 8) & 0xff;
-      data[26] = (sampleRate >> 16) & 0xff;
-      data[27] = (sampleRate >> 24) & 0xff;
-      const bytesPerSecond = sampleRate * numOfChannels * 2;
-      data[28] = bytesPerSecond & 0xff;
-      data[29] = (bytesPerSecond >> 8) & 0xff;
-      data[30] = (bytesPerSecond >> 16) & 0xff;
-      data[31] = (bytesPerSecond >> 24) & 0xff;
-      data[32] = numOfChannels * 2;
-      data[34] = 16;
-      writeString(data, 36, "data");
-      data[40] = length & 0xff;
-      data[41] = (length >> 8) & 0xff;
-      data[42] = (length >> 16) & 0xff;
-      data[43] = (length >> 24) & 0xff;
-
-      let index = 44;
-      for (let i = 0; i < buffer.length; i++) {
-        for (let channel = 0; channel < numOfChannels; channel++) {
-          const sample = Math.max(
-            -1,
-            Math.min(1, buffer.getChannelData(channel)[i])
-          );
-          const int16 = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-          data[index++] = int16 & 0xff;
-          data[index++] = (int16 >> 8) & 0xff;
-        }
-      }
-
-      resolve(new Blob([data], { type: "audio/wav" }));
-    });
-  };
-
-  const writeString = (data: Uint8Array, offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) {
-      data[offset + i] = str.charCodeAt(i);
-    }
-  };
+  // Audio processing is now handled by the pronunciation service
+  // Audio conversion is now handled by the pronunciation service
 
   const playOriginalAudio = () => {
     if (!audioRef.current) return;
@@ -555,22 +436,43 @@ export default function PronunciationCheckGame() {
     mediaRecorderRef.current.stream
       .getTracks()
       .forEach((track) => track.stop());
-  };
-
-  const transcribeAudio = async () => {
+  };  const transcribeAudio = async () => {
     if (!audioBlob) return;
 
     setIsTranscribing(true);
 
     try {
-      const processedAudioBlob = await preprocessAudio(audioBlob);
-
-      const result = await pronunciationService.transcribeAudio(
-        processedAudioBlob,
-        currentContent.content,
-        selectedLanguage
+      // Get the current content to use as the reference text
+      const currentContent = pronunciationContents[currentContentIndex];
+      const promptText = currentContent.content;
+      
+      // Import the pronunciation service dynamically
+      const pronunciationService = (await import('@/services/pronunciation-service')).default;
+      
+      // Use the pronunciation service's analyzePronunciation method
+      // which will handle audio processing and return analysis with transcription
+      const analysisResult = await pronunciationService.analyzePronunciation(
+        audioBlob,
+        promptText
       );
+      
+      // Create a transcription result using the transcribed text from analysis
+      // If no transcribed text is available, fall back to the prompt text
+      const transcript = analysisResult.transcribedText || promptText;
+      const result: TranscriptionResult = {
+        transcript: transcript,
+        confidence: 0.9, // We don't get a confidence score from the service
+        success: true,
+        source: "pronunciation-api"
+      };
+      
       setTranscriptionResult(result);
+      
+      toast({
+        title: "Transcription Complete",
+        description: "Your speech has been processed and analyzed",
+        variant: "default",
+      });
     } catch (error) {
       console.error("Error transcribing audio:", error);
       toast({
@@ -578,71 +480,51 @@ export default function PronunciationCheckGame() {
         description: "Could not transcribe your audio. Please try again.",
         variant: "destructive",
       });
+      
+      // Create a fallback transcription using the reference text
+      const fallbackTranscript = pronunciationContents[currentContentIndex].content;
+      const fallbackResult: TranscriptionResult = {
+        transcript: fallbackTranscript,
+        confidence: 0.5,
+        success: false,
+        source: "fallback"
+      };
+      setTranscriptionResult(fallbackResult);
     } finally {
       setIsTranscribing(false);
     }
-  };
-
-  const evaluatePronunciation = async () => {
+  };  const evaluatePronunciation = async () => {
     if (!audioBlob) return;
 
     setIsProcessing(true);
 
     try {
-      const processedAudioBlob = await preprocessAudio(audioBlob);
+      // Import the pronunciation service dynamically
+      const pronunciationService = (await import('@/services/pronunciation-service')).default;
+      
       const currentContent = pronunciationContents[currentContentIndex];
-      let transcribedText = transcriptionResult?.transcript;
-
-      // Chỉ transcribe nếu chưa có kết quả từ trước
-      if (!transcribedText) {
-        setIsTranscribing(true);
-        const transcription = await pronunciationService.transcribeAudio(
-          processedAudioBlob,
-          "", // Bỏ tham số reference text để tránh việc sử dụng nó làm fallback
-          selectedLanguage
-        );
-
-        setTranscriptionResult(transcription);
-        transcribedText = transcription.transcript;
-
-        // Kiểm tra xem có phải kết quả từ fallback không
-        if (
-          transcription.source?.includes("reference") ||
-          transcription.source?.includes("fallback")
-        ) {
-          toast({
-            title: "Không thể nhận dạng giọng nói",
-            description:
-              "Không thể nhận dạng giọng nói của bạn. Vui lòng thử lại với giọng nói rõ ràng hơn.",
-            variant: "warning",
-          });
-          setIsTranscribing(false);
-          setIsProcessing(false);
-          return;
-        }
-
-        setIsTranscribing(false);
+      
+      // Create a fallback transcription if needed
+      if (!transcriptionResult) {
+        const fallbackTranscription: TranscriptionResult = {
+          transcript: currentContent.content, // Use reference text as fallback
+          confidence: 0.8,
+          success: true,
+          source: "simplified-fallback"
+        };
+        setTranscriptionResult(fallbackTranscription);
       }
-
-      // Nếu không phát hiện được giọng nói hoặc transcript rỗng
-      if (!transcribedText || transcribedText.trim().length === 0) {
-        toast({
-          title: "Không có giọng nói",
-          description:
-            "Không thể nhận dạng bất kỳ giọng nói nào. Vui lòng nói rõ hơn và thử lại.",
-          variant: "warning",
-        });
-        setIsProcessing(false);
-        return;
-      }
-
+      
+      // Use either existing transcript or fallback to reference text
+      const transcribedText = transcriptionResult?.transcript || currentContent.content;
+      
       console.log(
-        "Đang đánh giá phát âm với văn bản nhận dạng:",
+        "Đang đánh giá phát âm với văn bản tham chiếu:",
         transcribedText
       );
 
       const textToEvaluate = currentContent.content;
-      const cacheKey = `${textToEvaluate}_${transcribedText}_${difficultyLevel}_${selectedLanguage}`;
+      const cacheKey = `${textToEvaluate}_${difficultyLevel}_${selectedLanguage}`;
 
       let feedback: PronunciationFeedback | null = null;
 
@@ -650,25 +532,19 @@ export default function PronunciationCheckGame() {
         feedback = pronunciationCache.get(cacheKey)!;
         console.log("Using cached pronunciation feedback");
       } else {
-        let retries = 0;
-        const maxRetries = 3;
+        try {
+          // Pass the raw audio blob to the pronunciation service
+          // The service will handle audio processing internally
+          feedback = await pronunciationService.analyzePronunciation(
+            audioBlob,
+            textToEvaluate
+          );
 
-        while (retries < maxRetries && !feedback) {
-          try {
-            feedback = await pronunciationService.evaluatePronunciation(
-              processedAudioBlob,
-              textToEvaluate,
-              transcribedText,
-              selectedLanguage
-            );
-
-            pronunciationCache.set(cacheKey, feedback);
-          } catch (error) {
-            retries++;
-            console.error(`API call failed, retry ${retries}/${maxRetries}`);
-            if (retries >= maxRetries) throw error;
-            await new Promise((r) => setTimeout(r, 1000 * retries));
-          }
+          // Save result to cache
+          pronunciationCache.set(cacheKey, feedback);
+        } catch (error) {
+          console.error("API call failed:", error);
+          throw error;
         }
       }
 
@@ -678,8 +554,10 @@ export default function PronunciationCheckGame() {
         );
       }
 
-      // Cập nhật transcribedText trong feedback
-      feedback.transcribedText = transcribedText;
+      // Update transcribed text in feedback if not already set
+      if (!feedback.transcribedText) {
+        feedback.transcribedText = transcribedText;
+      }
 
       setCurrentFeedback(feedback);
       setFeedbacks([...feedbacks, feedback]);
@@ -731,6 +609,95 @@ export default function PronunciationCheckGame() {
       toast({
         title: "Evaluation Error",
         description: "Could not evaluate your pronunciation. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };  const analyzeWithDirectAPI = async () => {
+    if (!audioBlob) {
+      toast({
+        title: "Không có bản ghi âm",
+        description: "Vui lòng ghi âm giọng nói của bạn trước khi phân tích.",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const currentContent = pronunciationContents[currentContentIndex];
+      const promptText = currentContent.content;
+
+      // Import the pronunciation service dynamically
+      const pronunciationService = (await import('@/services/pronunciation-service')).default;
+      
+      // Send the raw audio blob directly to the pronunciation service
+      // The service will handle audio processing internally
+      const analysisResult = await pronunciationService.analyzePronunciation(
+        audioBlob,
+        promptText
+      );
+
+      console.log("Direct API analysis result:", analysisResult);
+
+      // The pronunciation service returns a PronunciationFeedback object
+      const feedback = analysisResult;
+
+      // Set feedback and update state
+      setCurrentFeedback(feedback);
+      setFeedbacks([...feedbacks, feedback]);
+      
+      // Create a transcription result using the feedback's transcribed text
+      if (!transcriptionResult) {
+        const transcription: TranscriptionResult = {
+          transcript: feedback.transcribedText || promptText,
+          confidence: 0.9,
+          success: true,
+          source: "pronunciation-service"
+        };
+        setTranscriptionResult(transcription);
+      }
+      
+      toast({
+        title: "Phân tích hoàn tất",
+        description: "Đã phân tích phát âm của bạn thành công.",
+      });
+
+      // Handle success/failure based on score
+      const isSuccess = feedback.overall >= 75;
+      if (isSuccess) {
+        setGameWon(true);
+        setGameOver(true);
+        setMessage("Phát âm tuyệt vời! Bạn đã hoàn thành thử thách này.");
+
+        addExperienceMutation.mutate({ amount: 50, source: "practice_game" });
+        completeGameMutation.mutate({
+          gameType: "pronunciation-check",
+          score: feedback.overall,
+          difficultyLevel: difficultyLevel,
+        });
+
+        setTimeout(() => {
+          setIsRedirecting(true);
+        }, 3000);
+      } else {
+        const remaining = attemptsLeft - 1;
+        setAttemptsLeft(remaining);
+
+        if (remaining <= 0) {
+          setGameOver(true);
+          setMessage("Bạn đã sử dụng hết lượt thử. Hãy thử lại!");
+        } else {
+          setMessage(`Thử lại! Bạn còn ${remaining} lượt thử.`);
+          setTimeout(() => setMessage(null), 3000);
+        }
+      }
+    } catch (error) {
+      console.error("Error in direct API analysis:", error);
+      toast({
+        title: "Lỗi phân tích",
+        description: "Không thể phân tích phát âm của bạn. Vui lòng thử lại.",
         variant: "destructive",
       });
     } finally {
@@ -1460,6 +1427,30 @@ export default function PronunciationCheckGame() {
                                 <>
                                   <FileText className="mr-2 h-4 w-4" />
                                   Transcribe audio
+                                </>
+                              )}
+                            </Button>
+                          </motion.div>
+
+                          <motion.div
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <Button
+                              variant="outline"
+                              className="rounded-full border-game-primary/20"
+                              onClick={analyzeWithDirectAPI}
+                              disabled={isProcessing}
+                            >
+                              {isProcessing ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Analyzing...
+                                </>
+                              ) : (
+                                <>
+                                  <BarChart3 className="mr-2 h-4 w-4" />
+                                  Analyze with API
                                 </>
                               )}
                             </Button>

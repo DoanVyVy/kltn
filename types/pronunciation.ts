@@ -31,6 +31,7 @@ export interface TranscriptionResult {
   transcript: string;
   confidence: number;
   success: boolean;
+  source?: string;
   error?: string;
 }
 
