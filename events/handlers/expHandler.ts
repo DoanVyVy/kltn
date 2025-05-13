@@ -1,6 +1,7 @@
 import { db } from "@/database";
 import eventHandlers from "@/lib/event";
-
+import { userLeaderboardGainExp } from "@/services/leaderboard-service";
+// exp tăng thì tính level
 eventHandlers.register("exp_gained", async (event) => {
 	if (!event.createdBy) {
 		return;
@@ -47,6 +48,7 @@ eventHandlers.register("exp_gained", async (event) => {
 			currentLevel: newLevel?.levelNumber,
 		},
 	});
+	userLeaderboardGainExp(user.userId, event.payload.exp);
 });
 
 export {};
