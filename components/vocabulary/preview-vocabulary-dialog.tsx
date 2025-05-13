@@ -130,7 +130,7 @@ const PreviewVocabularyDialog = memo(
             limit: 100,
             categoryId: course.categoryId,
           });
-          setPreviewWords(data || []);
+          setPreviewWords(data?.results || []);
         } catch (error) {
           console.error("Lỗi khi lấy từ vựng:", error);
           setPreviewWords([]);

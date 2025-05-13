@@ -70,7 +70,7 @@ model Achievement {
   description       String
   iconUrl           String?           @map("icon_url")
   requiredCondition String?           @map("required_condition")
-  pointsReward      Int               @default(0) @map("points_reward")
+  expReward         Int               @default(0) @map("exp_reward")
   userAchievements  UserAchievement[]
 
   @@map("achievements")
@@ -137,6 +137,7 @@ model GrammarContent {
   categoryId          Int                  @map("category_id")
   title               String
   explanation         String
+  syntax              String?              @map("syntax")
   examples            String?
   notes               String?
   imageUrl            String?              @map("image_url")
@@ -146,7 +147,6 @@ model GrammarContent {
   gameQuestions       GameQuestion[]
   userLearningAnswers UserLearningAnswer[]
   userReviewGrammars  UserReviewGrammar[]
-  syntax              String?
 
   @@index([categoryId])
   @@map("grammar_contents")
@@ -172,7 +172,7 @@ model GameActivity {
   description      String?
   skillFocus       String?        @map("skill_focus")
   difficultyLevel  Int            @default(1) @map("difficulty_level")
-  pointsReward     Int            @default(10) @map("points_reward")
+  expReward        Int            @default(10) @map("exp_reward")
   timeLimitSeconds Int?           @map("time_limit_seconds")
   instructions     String?
   gameType         GameType       @relation(fields: [gameTypeId], references: [gameTypeId], onDelete: Cascade)
@@ -318,5 +318,87 @@ model UserGameCompletion {
 
   @@index([userId])
   @@map("user_game_completions")
+  @@schema("public")
+}
+
+model DailyIdiomChallenge {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @default(now()) @db.Date
+  idioms          Json      @db.Json // Array of {phrase, meaning, options, correctOption}
+  difficultyLevel Int       @default(1) @map("difficulty_level")
+  maxAttempts     Int       @default(5) @map("max_attempts")
+  expReward       Int       @default(50) @map("exp_reward")
+
+  @@unique([date])
+  @@map("daily_idiom_challenges")
+  @@schema("public")
+}
+
+model DailySentenceScramble {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @default(now()) @db.Date
+  sentences       Json      @db.Json // Array of {original, scrambled, hint}
+  difficultyLevel Int       @default(1) @map("difficulty_level")
+  maxAttempts     Int       @default(3) @map("max_attempts")
+  expReward       Int       @default(50) @map("exp_reward")
+
+  @@unique([date])
+  @@map("daily_sentence_scrambles")
+  @@schema("public")
+}
+
+model DailyWordAssociation {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @default(now()) @db.Date
+  wordPairs       Json      @db.Json // Array of {word, match}
+  timeLimit       Int       @default(60) @map("time_limit")
+  difficultyLevel Int       @default(1) @map("difficulty_level")
+  expReward       Int       @default(50) @map("exp_reward")
+
+  @@unique([date])
+  @@map("daily_word_associations")
+  @@schema("public")
+}
+
+model DailyWordGuess {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @default(now()) @db.Date
+  word            String
+  clues           Json      @db.Json // Array of clue strings
+  maxAttempts     Int       @default(6) @map("max_attempts")
+  difficultyLevel Int       @default(1) @map("difficulty_level")
+  expReward       Int       @default(50) @map("exp_reward")
+
+  @@unique([date])
+  @@map("daily_word_guesses")
+  @@schema("public")
+}
+
+model UserGameResult {
+  id             Int      @id @default(autoincrement())
+  userId         String   @map("user_id") @db.Uuid
+  gameId         Int      @map("game_id") // References the specific game's ID (DailyIdiomChallenge.id, etc.)
+  gameType       String   @map("game_type") // Can be "daily", "vocabulary", "grammar", etc.
+  gameSubtype    String   @map("game_subtype") // Like "idiom-challenge", "sentence-scramble", etc.
+  score          Int      @default(0)
+  accuracy       Decimal? @db.Decimal(5, 2)
+  timeTaken      Int?     @map("time_taken") // in seconds
+  level          Int      @default(1)
+  attemptsUsed   Int?     @map("attempts_used") // For tracking number of attempts
+  itemsCompleted Int?     @map("items_completed") // For tracking completed items (sentences, words, pairs)
+  details        Json?    @db.Json // Flexible field for game-specific data like userAnswers, guesses
+  correct        Int      @default(0)
+  incorrect      Int      @default(0)
+  completed      Boolean  @default(false)
+  completedAt    DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+  xpEarned       Int      @default(0) @map("xp_earned")
+  user           User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, gameId, gameType, gameSubtype, completedAt(sort: Desc)])
+  @@index([userId])
+  @@index([gameType])
+  @@index([gameSubtype])
+  @@index([completedAt])
+  @@map("user_game_results")
   @@schema("public")
 }

@@ -14,6 +14,70 @@ interface Category {
 }
 
 export default createTRPCRouter({
+  getAll: baseProcedure
+    .input(
+      paginationRequestSchema.extend({
+        search: z.string().optional(),
+        categoryId: z.number().optional(),
+        sortBy: z.string().optional(),
+        sortDirection: z.string().optional(), // asc or desc
+      })
+    )
+    .query(async ({ input }) => {
+      const { page, limit, search, categoryId, sortBy, sortDirection } = input;
+      const skip = (page - 1) * limit;
+      const take = limit;
+
+      // Build search condition
+      const whereCondition: any = {};
+
+      if (search) {
+        whereCondition.OR = [
+          { word: { contains: search, mode: "insensitive" } },
+          { definition: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
+      if (categoryId) {
+        whereCondition.categoryId = categoryId;
+      }
+
+      // Build sort condition
+      const orderBy: any = {};
+      if (sortBy) {
+        orderBy[sortBy] =
+          sortDirection?.toLowerCase() === "desc" ? "desc" : "asc";
+      } else {
+        orderBy.wordId = "desc"; // Default sort by ID descending
+      }
+
+      // Query and count total results
+      const [words, total] = await Promise.all([
+        prisma.vocabularyWord.findMany({
+          where: whereCondition,
+          skip,
+          take,
+          orderBy,
+          include: {
+            category: true,
+          },
+        }),
+        prisma.vocabularyWord.count({
+          where: whereCondition,
+        }),
+      ]);
+
+      return {
+        results: words,
+        metadata: {
+          totalCount: total,
+          pageCount: Math.ceil(total / limit),
+          page,
+          pageSize: limit,
+        },
+      };
+    }),
+
   getWord: baseProcedure
     .input(z.object({ wordId: z.number().int() }))
     .query(async ({ input }) => {
