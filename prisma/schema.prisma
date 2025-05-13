@@ -12,29 +12,43 @@ datasource db {
 }
 
 model User {
-  userId               String                @id @default(uuid()) @map("user_id") @db.Uuid
-  username             String                @unique
-  email                String                @unique
-  passwordHash         String                @map("password_hash")
-  fullName             String?               @map("full_name")
-  avatarUrl            String?               @map("avatar_url")
-  currentLevel         Int                   @default(1) @map("current_level")
-  totalPoints          Int                   @default(0) @map("total_points")
-  streakDays           Int                   @default(0) @map("streak_days")
-  lastActiveDate       DateTime?             @map("last_active_date")
-  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
-  role                 String                @default("user") @map("role")
-  userAchievements     UserAchievement[]
-  userProgress         UserProgress[]
-  leaderboardEntries   LeaderboardEntry[]
-  userLearningAnswers  UserLearningAnswer[]
-  userReviewWords      UserReviewWord[]
-  userReviewGrammars   UserReviewGrammar[]
-  userGameCompletions  UserGameCompletion[]
-  gameResults          UserGameResult[]
+  userId              String               @id @default(uuid()) @map("user_id") @db.Uuid
+  username            String               @unique
+  email               String               @unique
+  passwordHash        String               @map("password_hash")
+  fullName            String?              @map("full_name")
+  avatarUrl           String?              @map("avatar_url")
+  currentLevel        Int                  @default(1) @map("current_level")
+  currentExp          Int                  @default(0) @map("current_exp")
+  totalPoints         Int                  @default(0) @map("total_points")
+  streakDays          Int                  @default(0) @map("streak_days")
+  lastActiveDate      DateTime?            @map("last_active_date")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  role                String               @default("user") @map("role")
+  userAchievements    UserAchievement[]
+  userProgress        UserProgress[]
+  leaderboardEntries  LeaderboardEntry[]
+  userLearningAnswers UserLearningAnswer[]
+  userReviewWords     UserReviewWord[]
+  userReviewGrammars  UserReviewGrammar[]
+  userGameCompletions UserGameCompletion[]
 
   @@map("users")
+  @@schema("public")
+}
+
+model EventStore {
+  eventId       Int      @id @default(autoincrement()) @map("event_id")
+  userId        String   @map("user_id") @db.Uuid
+  eventType     String   @map("event_type")
+  eventData     Json?    @map("event_data") @db.Json
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  aggregateType String?  @map("aggregate_type")
+  aggregateId   String?  @map("aggregate_id")
+
+  @@index([userId])
+  @@map("event_store")
   @@schema("public")
 }
 
