@@ -31,12 +31,11 @@ const userProcessRouter = createTRPCRouter({
     const user = await getCurrentUser();
     if (!user) {
       throw new Error("Unauthorized");
-    }
-    return await prisma.$queryRaw`
+    }    return await prisma.$queryRaw`
       SELECT up.*, c.* 
       FROM "public"."user_progress" up
       JOIN "public"."categories" c ON up."category_id" = c."category_id"
-      WHERE up."user_id" = ${user.user.id}
+      WHERE up."user_id" = ${user.user.id}::uuid
       AND up."category_id" IS NOT NULL
     `;
   }),
@@ -380,10 +379,10 @@ const userProcessRouter = createTRPCRouter({
 
       const contentType = input.wordId ? "vocabulary" : "grammar";
 
-      // find user progress using raw query
+      // find user progress using raw query      
       const progressResult = await prisma.$queryRaw<UserProgress[]>`
         SELECT * FROM "public"."user_progress"
-        WHERE "user_id" = ${user.user.id}
+        WHERE "user_id" = ${user.user.id}::uuid
         AND "category_id" = ${input.categoryId}
         AND "content_type" = ${contentType}
       `;
@@ -395,14 +394,14 @@ const userProcessRouter = createTRPCRouter({
         const newProgress = await prisma.$executeRaw`
           INSERT INTO "public"."user_progress"
           ("user_id", "category_id", "process_percentage", "content_type")
-          VALUES (${user.user.id}, ${input.categoryId}, 0, ${contentType})
+          VALUES (${user.user.id}::uuid, ${input.categoryId}, 0, ${contentType})
           RETURNING *
         `;
 
-        // Fetch the newly created progress
+        // Fetch the newly created progress        
         const fetchedProgress = await prisma.$queryRaw<UserProgress[]>`
           SELECT * FROM "public"."user_progress"
-          WHERE "user_id" = ${user.user.id}
+          WHERE "user_id" = ${user.user.id}::uuid
           AND "category_id" = ${input.categoryId}
           AND "content_type" = ${contentType}
           ORDER BY "progress_id" DESC
@@ -418,7 +417,7 @@ const userProcessRouter = createTRPCRouter({
       await prisma.$executeRaw`
         INSERT INTO "public"."user_learning_answers"
         ("user_id", "word_id", "grammar_id", "is_correct", "created_at", "process_id")
-        VALUES (${user.user.id}, ${input.wordId || null}, ${
+        VALUES (${user.user.id}::uuid, ${input.wordId || null}, ${
         input.grammarId || null
       }, 
                 ${input.correct}, ${new Date()}, ${progress.progressId})
@@ -560,12 +559,10 @@ const userProcessRouter = createTRPCRouter({
       const user = await getCurrentUser();
       if (!user) {
         throw new Error("Unauthorized");
-      }
-
-      // if user already registered, return
+      }      // if user already registered, return
       const userCategory = await prisma.$queryRaw<any[]>`
         SELECT * FROM "public"."user_progress"
-        WHERE "user_id" = ${user.user.id}
+        WHERE "user_id" = ${user.user.id}::uuid
         AND "category_id" = ${input.categoryId}
         AND "content_type" = ${input.contentType}
         LIMIT 1
@@ -573,12 +570,10 @@ const userProcessRouter = createTRPCRouter({
 
       if (userCategory && userCategory.length > 0) {
         return;
-      }
-
-      await prisma.$executeRaw`
+      }      await prisma.$executeRaw`
         INSERT INTO "public"."user_progress"
         ("user_id", "category_id", "process_percentage", "content_type")
-        VALUES (${user.user.id}, ${input.categoryId}, 0, ${input.contentType})
+        VALUES (${user.user.id}::uuid, ${input.categoryId}, 0, ${input.contentType})
       `;
     }),
 });
@@ -587,3 +582,5 @@ const userProcessRouter = createTRPCRouter({
 userProcessRouterInstance = userProcessRouter;
 
 export default userProcessRouter;
+
+

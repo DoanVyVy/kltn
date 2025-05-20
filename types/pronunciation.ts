@@ -19,6 +19,16 @@ export interface PronunciationFeedback {
     text: string;
     type: string;
   };
+  expectedPhonemes?: string[];
+  userPhonemes?: string[];
+  correctPhonemes?: string[];
+  mistakes?: {
+    position: number;
+    expected: string;
+    actual: string;
+  }[];
+  pitchMean?: number;
+  energyMean?: number;
 }
 
 export interface WordAnalysis {
@@ -41,6 +51,12 @@ export interface PronunciationContent {
   content: string;
   audioUrl?: string;
   translation?: string;
+  ipa?: string;
+  difficulty?: number;
+  category?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PronunciationGameData {

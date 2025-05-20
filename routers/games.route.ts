@@ -28,6 +28,7 @@ const pronunciationContentSchema = z.object({
   content: z.string(),
   audioUrl: z.string().optional(),
   translation: z.string().optional(),
+  ipa: z.string().optional(),
 });
 
 // Schema for creating a new game activity
@@ -718,64 +719,70 @@ const gamesRouter = createTRPCRouter({
       }
     }),
 
-  // New endpoint for pronunciation game
-  getPronunciationGame: baseProcedure.query(async ({ ctx: { db } }) => {
-    try {
-      // Sample pronunciation content - in production this would come from the database
-      const pronunciationContent = [
-        {
-          id: 1,
-          type: "word",
-          content: "Vocabulary",
-          audioUrl: "/audio/vocabulary.mp3",
-          translation: "Từ vựng",
-        },
-        {
-          id: 2,
-          type: "sentence",
-          content: "Learning English requires consistent practice.",
-          audioUrl: "/audio/sentence1.mp3",
-          translation: "Học tiếng Anh đòi hỏi thực hành đều đặn.",
-        },
-        {
-          id: 3,
-          type: "paragraph",
-          content:
-            "The more you practice speaking, the more confident you will become.",
-          audioUrl: "/audio/paragraph1.mp3",
-          translation:
-            "Bạn càng luyện tập nói nhiều, bạn sẽ càng trở nên tự tin hơn.",
-        },
-        {
-          id: 4,
-          type: "word",
-          content: "Pronunciation",
-          audioUrl: "/audio/pronunciation.mp3",
-          translation: "Phát âm",
-        },
-        {
-          id: 5,
-          type: "sentence",
-          content: "She speaks English with perfect pronunciation.",
-          audioUrl: "/audio/sentence2.mp3",
-          translation: "Cô ấy nói tiếng Anh với phát âm hoàn hảo.",
-        },
-      ];
+  // Pronunciation game endpoint - redirecting to pronunciation router
+  getPronunciationGame: baseProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().min(1).max(50).default(15),
+          difficulty: z.number().min(1).max(3).optional(),
+          category: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        // We're reusing the pronunciation router's implementation to get content
+        // This lets us maintain a single source of truth for pronunciation content
+        const { db } = ctx;
 
-      // In a real implementation, you would fetch this from the database
-      // For example:
-      // const pronunciationContentFromDB = await db.pronunciationContent.findMany({
-      //   orderBy: { difficulty: 'asc' },
-      // });
+        // Build where condition
+        const where: any = {
+          isActive: true,
+        };
 
-      return {
-        content: pronunciationContent,
-      };
-    } catch (error) {
-      console.error("Error fetching pronunciation game content:", error);
-      throw error;
-    }
-  }),
+        if (input?.difficulty) {
+          where.difficulty = input.difficulty;
+        }
+
+        if (input?.category) {
+          where.category = input.category;
+        }
+
+        // Fetch pronunciation content directly
+        const pronunciationContentItems =
+          await db.pronunciationContent.findMany({
+            where,
+            orderBy: {
+              id: "asc", // Order by ID
+            },
+            take: input?.limit || 15, // Limit based on input or default to 15
+          });
+
+        console.log(
+          `Found ${pronunciationContentItems.length} pronunciation content items from database`
+        );
+
+        // Map to the expected format for the game
+        const pronunciationContent = pronunciationContentItems.map((item) => ({
+          id: item.id,
+          type: item.type as "word" | "sentence" | "paragraph",
+          content: item.content,
+          audioUrl: item.audioUrl || undefined,
+          translation: item.translation || undefined,
+          difficulty: item.difficulty || 1,
+          category: item.category || undefined,
+        }));
+
+        // Return real database content regardless if empty or not
+        return {
+          content: pronunciationContent,
+        };
+      } catch (error) {
+        console.error("Error fetching pronunciation game content:", error);
+        throw error;
+      }
+    }),
 });
 
 export default gamesRouter;

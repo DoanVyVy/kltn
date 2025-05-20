@@ -14,6 +14,8 @@ import authRouter from "./auth.route";
 import leaderboardRouter from "./leaderboard.route";
 import achievementRouter from "./achievement.route";
 import gamesRouter from "./games.route";
+import pronunciationRouter from "./pronunciation.route";
+import { dailyGamesRouter } from "./daily-games.route";
 
 export const appRouter = createTRPCRouter({
   category: categoryRouter,
@@ -31,6 +33,8 @@ export const appRouter = createTRPCRouter({
   leaderboard: leaderboardRouter,
   achievement: achievementRouter,
   games: gamesRouter,
+  pronunciation: pronunciationRouter,
+  dailyGames: dailyGamesRouter,
 });
 
 export type AppRouter = typeof appRouter;

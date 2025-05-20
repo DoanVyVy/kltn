@@ -276,7 +276,7 @@ export default function LearnGrammarPage() {
               Không có nội dung ngữ pháp
             </h3>
             <p className="mb-6 max-w-md text-gray-500">
-              Khóa học này chưa có nội dung ngữ pháp hoặc đã bị lỗi. Vui lòng
+              Cấp độ này chưa có nội dung ngữ pháp hoặc đã bị lỗi. Vui lòng
               thử lại sau.
             </p>
             <Button
@@ -320,7 +320,7 @@ export default function LearnGrammarPage() {
 
         <div className="mb-6 space-y-2">
           <h1 className="text-2xl font-bold text-game-accent">
-            {category?.categoryName || "Khóa học ngữ pháp"}
+            {category?.categoryName || "Cấp độ ngữ pháp"}
           </h1>
           <div className="flex items-center justify-between">
             <Badge variant="outline" className="text-game-primary">
@@ -618,19 +618,19 @@ export default function LearnGrammarPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Dialog hiển thị thông tin khóa học */}
+        {/* Dialog hiển thị thông tin Cấp độ */}
         <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle className="text-xl text-game-accent">
-                Thông tin khóa học
+                Thông tin Cấp độ
               </DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
               <div>
                 <h3 className="mb-1 font-medium text-game-primary">
-                  Tên khóa học
+                  Tên Cấp độ
                 </h3>
                 <p>{category?.categoryName}</p>
               </div>

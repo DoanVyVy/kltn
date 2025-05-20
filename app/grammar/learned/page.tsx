@@ -124,7 +124,10 @@ export default function LearnedGrammarPage() {
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [previewGrammar, setPreviewGrammar] = useState<any>(null);
 
-  // Lấy danh sách các khóa học ngữ pháp có sẵn cho filter
+  // Lấy danh sách các
+  //
+  //
+  //  ngữ pháp có sẵn cho filter
   const { data: categories = [], isLoading: isCategoriesLoading } =
     trpc.category.getValidCategories.useQuery({
       isVocabularyCourse: false,
@@ -210,8 +213,8 @@ export default function LearnedGrammarPage() {
         Chưa có ngữ pháp nào đã học
       </h3>
       <p className="mb-6 max-w-md text-gray-500">
-        Bạn chưa học ngữ pháp nào hoặc chưa đăng ký khóa học ngữ pháp. Hãy đăng
-        ký và học ngữ pháp để danh sách hiển thị ở đây!
+        Bạn chưa học ngữ pháp nào hoặc chưa đăng ký ngữ pháp. Hãy đăng ký và học
+        ngữ pháp để danh sách hiển thị ở đây!
       </p>
       <Button className="game-button" onClick={() => router.push("/grammar")}>
         Bắt đầu học ngữ pháp
@@ -263,13 +266,12 @@ export default function LearnedGrammarPage() {
                 </span>
               </div>
             </CardContent>
-          </Card>
-
-          {/* Số lượng khóa học đã đăng ký */}
+          </Card>{" "}
+          {/* Số lượng cấp độ đã đăng ký */}
           <Card className="game-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg text-game-accent">
-                Khóa học ngữ pháp
+                Cấp độ ngữ pháp
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -309,11 +311,12 @@ export default function LearnedGrammarPage() {
               value={selectedCategory}
               onValueChange={handleCategoryChange}
             >
+              {" "}
               <SelectTrigger className="h-10 w-[180px] bg-white">
-                <SelectValue placeholder="Chọn khóa học" />
+                <SelectValue placeholder="Chọn cấp độ" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả khóa học</SelectItem>
+                <SelectItem value="all">Tất cả cấp độ</SelectItem>
                 {categories
                   .filter((category) => !category.isVocabularyCourse)
                   .map((category) => (
@@ -438,7 +441,6 @@ export default function LearnedGrammarPage() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-
                   {previewGrammar?.examples && (
                     <div className="mb-4">
                       <p className="mb-1 text-sm font-medium text-gray-500">
@@ -465,7 +467,6 @@ export default function LearnedGrammarPage() {
                       </div>
                     </div>
                   )}
-
                   {previewGrammar?.notes && (
                     <div className="mb-4">
                       <p className="mb-1 text-sm font-medium text-gray-500">
@@ -485,11 +486,10 @@ export default function LearnedGrammarPage() {
                         </Tooltip>
                       </TooltipProvider>
                     </div>
-                  )}
-
+                  )}{" "}
                   <div>
                     <p className="mb-1 text-sm font-medium text-gray-500">
-                      Khóa học:
+                      Cấp độ:
                     </p>
                     <Badge className="bg-game-primary/10 text-game-primary">
                       {previewGrammar?.category?.categoryName}
@@ -664,7 +664,8 @@ export default function LearnedGrammarPage() {
                   router.push(`/grammar/${previewGrammar?.categoryId}`);
                 }}
               >
-                Đi đến khóa học
+                {" "}
+                Đi đến cấp độ
               </Button>
             </DialogFooter>
           </DialogContent>

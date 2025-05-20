@@ -12,27 +12,28 @@ datasource db {
 }
 
 model User {
-  userId              String               @id @default(uuid()) @map("user_id") @db.Uuid
-  username            String               @unique
-  email               String               @unique
-  passwordHash        String               @map("password_hash")
-  fullName            String?              @map("full_name")
-  avatarUrl           String?              @map("avatar_url")
-  currentLevel        Int                  @default(1) @map("current_level")
-  currentExp          Int                  @default(0) @map("current_exp")
-  totalPoints         Int                  @default(0) @map("total_points")
-  streakDays          Int                  @default(0) @map("streak_days")
-  lastActiveDate      DateTime?            @map("last_active_date")
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
-  role                String               @default("user") @map("role")
-  userAchievements    UserAchievement[]
-  userProgress        UserProgress[]
-  leaderboardEntries  LeaderboardEntry[]
-  userLearningAnswers UserLearningAnswer[]
-  userReviewWords     UserReviewWord[]
-  userReviewGrammars  UserReviewGrammar[]
-  userGameCompletions UserGameCompletion[]
+  username                 String                      @unique
+  email                    String                      @unique
+  passwordHash             String                      @map("password_hash")
+  fullName                 String?                     @map("full_name")
+  avatarUrl                String?                     @map("avatar_url")
+  currentLevel             Int                         @default(1) @map("current_level")
+  totalPoints              Int                         @default(0) @map("total_points")
+  streakDays               Int                         @default(0) @map("streak_days")
+  lastActiveDate           DateTime?                   @map("last_active_date")
+  createdAt                DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  userId                   String                      @id @default(uuid()) @map("user_id") @db.Uuid
+  role                     String                      @default("user") @map("role")
+  currentExp               Int                         @default(0) @map("current_exp")
+  userAchievements         UserAchievement[]
+  userProgress             UserProgress[]
+  leaderboardEntries       LeaderboardEntry[]
+  userLearningAnswers      UserLearningAnswer[]
+  userReviewWords          UserReviewWord[]
+  userReviewGrammars       UserReviewGrammar[]
+  userGameCompletions      UserGameCompletion[]
+  userDailyGameCompletions UserDailyGameCompletion[]
 
   @@map("users")
   @@schema("public")
@@ -70,7 +71,7 @@ model Achievement {
   description       String
   iconUrl           String?           @map("icon_url")
   requiredCondition String?           @map("required_condition")
-  expReward         Int               @default(0) @map("exp_reward")
+  points_reward     Int               @default(0)
   userAchievements  UserAchievement[]
 
   @@map("achievements")
@@ -78,9 +79,9 @@ model Achievement {
 }
 
 model UserAchievement {
-  userId        String      @map("user_id") @db.Uuid
   achievementId Int         @map("achievement_id")
   dateAchieved  DateTime    @default(now()) @map("date_achieved") @db.Timestamptz(6)
+  userId        String      @map("user_id") @db.Uuid
   user          User        @relation(fields: [userId], references: [userId], onDelete: Cascade)
   achievement   Achievement @relation(fields: [achievementId], references: [achievementId], onDelete: Cascade)
 
@@ -96,13 +97,13 @@ model Category {
   description        String?
   difficultyLevel    Int              @default(1) @map("difficulty_level")
   orderIndex         Int?             @map("order_index")
-  vocabularyWords    VocabularyWord[]
-  grammarContents    GrammarContent[]
-  userProgress       UserProgress[]
   totalWords         Int              @default(0) @map("total_words")
   totalGrammar       Int              @default(0) @map("total_grammar")
   status             String           @default("active")
   isVocabularyCourse Boolean          @default(true) @map("is_vocabulary_course")
+  vocabularyWords    VocabularyWord[]
+  grammarContents    GrammarContent[]
+  userProgress       UserProgress[]
 
   @@map("categories")
   @@schema("public")
@@ -117,15 +118,14 @@ model VocabularyWord {
   definition          String
   exampleSentence     String?              @map("example_sentence")
   audioUrl            String?              @map("audio_url")
+  difficultyLevel     Int                  @default(1) @map("difficulty_level")
+  paronymWords        String[]
+  definitions         Json                 @default("[]") @db.Json
   imageUrl            String?              @map("image_url")
   videoUrl            String?              @map("video_url")
-  difficultyLevel     Int                  @default(1) @map("difficulty_level")
   category            Category             @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
-  gameQuestions       GameQuestion[]
-  paronymWords        String[]
   userLearningAnswers UserLearningAnswer[]
   userReviewWords     UserReviewWord[]
-  definitions         Json                 @default("[]") @db.Json
 
   @@index([categoryId])
   @@map("vocabulary_words")
@@ -134,77 +134,21 @@ model VocabularyWord {
 
 model GrammarContent {
   contentId           Int                  @id @default(autoincrement()) @map("content_id")
-  categoryId          Int                  @map("category_id")
   title               String
   explanation         String
-  syntax              String?              @map("syntax")
   examples            String?
   notes               String?
+  orderIndex          Int?                 @map("order_index")
+  categoryId          Int                  @map("category_id")
   imageUrl            String?              @map("image_url")
   videoUrl            String?              @map("video_url")
-  orderIndex          Int?                 @map("order_index")
+  syntax              String?              @map("syntax")
   category            Category             @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
-  gameQuestions       GameQuestion[]
   userLearningAnswers UserLearningAnswer[]
   userReviewGrammars  UserReviewGrammar[]
 
   @@index([categoryId])
   @@map("grammar_contents")
-  @@schema("public")
-}
-
-model GameType {
-  gameTypeId     Int            @id @default(autoincrement()) @map("game_type_id")
-  gameName       String         @map("game_name")
-  description    String?
-  iconUrl        String?        @map("icon_url")
-  instructions   String?
-  gameActivities GameActivity[]
-
-  @@map("game_types")
-  @@schema("public")
-}
-
-model GameActivity {
-  activityId       Int            @id @default(autoincrement()) @map("activity_id")
-  gameTypeId       Int            @map("game_type_id")
-  activityName     String         @map("activity_name")
-  description      String?
-  skillFocus       String?        @map("skill_focus")
-  difficultyLevel  Int            @default(1) @map("difficulty_level")
-  expReward        Int            @default(10) @map("exp_reward")
-  timeLimitSeconds Int?           @map("time_limit_seconds")
-  instructions     String?
-  gameType         GameType       @relation(fields: [gameTypeId], references: [gameTypeId], onDelete: Cascade)
-  gameQuestions    GameQuestion[]
-
-  @@index([gameTypeId])
-  @@map("game_activities")
-  @@schema("public")
-}
-
-model GameQuestion {
-  questionId       Int             @id @default(autoincrement()) @map("question_id")
-  activityId       Int             @map("activity_id")
-  questionType     String          @map("question_type")
-  questionText     String          @map("question_text")
-  correctAnswer    String          @map("correct_answer")
-  options          Json?
-  hint             String?
-  explanation      String?
-  difficultyLevel  Int             @default(1) @map("difficulty_level")
-  points           Int             @default(5)
-  mediaUrl         String?         @map("media_url")
-  relatedWordId    Int?            @map("related_word_id")
-  relatedGrammarId Int?            @map("related_grammar_id")
-  activity         GameActivity    @relation(fields: [activityId], references: [activityId], onDelete: Cascade)
-  vocabularyWord   VocabularyWord? @relation(fields: [relatedWordId], references: [wordId], onDelete: SetNull)
-  grammarContent   GrammarContent? @relation(fields: [relatedGrammarId], references: [contentId], onDelete: SetNull)
-
-  @@index([activityId])
-  @@index([relatedWordId])
-  @@index([relatedGrammarId])
-  @@map("game_questions")
   @@schema("public")
 }
 
@@ -260,17 +204,17 @@ model UserReviewGrammar {
 
 model UserProgress {
   progressId          Int                  @id @default(autoincrement()) @map("progress_id")
-  userId              String               @map("user_id") @db.Uuid
   categoryId          Int?                 @map("category_id")
   masteryLevel        Decimal              @default(0) @map("mastery_level") @db.Decimal(5, 2)
   timesPracticed      Int                  @default(0) @map("times_practiced")
   lastPracticed       DateTime?            @map("last_practiced") @db.Timestamptz(6)
-  nextReviewDate      DateTime?            @map("next_review_date") @db.Timestamptz(6)
-  contentType         String               @default("vocabulary") @map("content_type") // "vocabulary" or "grammar"
+  nextReviewDate      DateTime?            @db.Timestamptz(6)
+  userId              String               @map("user_id") @db.Uuid
+  processPercentage   Int                  @default(0) @map("process_percentage")
+  contentType         String               @default("vocabulary") @map("content_type")
   user                User                 @relation(fields: [userId], references: [userId], onDelete: Cascade)
   category            Category?            @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
   userLearningAnswers UserLearningAnswer[]
-  processPercentage   Int                  @default(0) @map("process_percentage")
 
   @@index([userId])
   @@index([categoryId])
@@ -293,10 +237,10 @@ model Leaderboard {
 model LeaderboardEntry {
   entryId       Int         @id @default(autoincrement()) @map("entry_id")
   leaderboardId Int         @map("leaderboard_id")
-  userId        String      @map("user_id") @db.Uuid
   score         Int
   rank          Int?
   updatedAt     DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  userId        String      @map("user_id") @db.Uuid
   leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [leaderboardId], onDelete: Cascade)
   user          User        @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
@@ -321,84 +265,167 @@ model UserGameCompletion {
   @@schema("public")
 }
 
-model DailyIdiomChallenge {
-  id              Int       @id @default(autoincrement())
-  date            DateTime  @default(now()) @db.Date
-  idioms          Json      @db.Json // Array of {phrase, meaning, options, correctOption}
-  difficultyLevel Int       @default(1) @map("difficulty_level")
-  maxAttempts     Int       @default(5) @map("max_attempts")
-  expReward       Int       @default(50) @map("exp_reward")
+model PronunciationContent {
+  id               Int                      @id @default(autoincrement())
+  type             String                   // "word", "sentence", "paragraph"
+  content          String                   // The text to be pronounced
+  audioUrl         String?                  @map("audio_url")
+  translation      String?                  // Translation in Vietnamese
+  difficulty       Int                      @default(1) // 1=beginner, 2=intermediate, 3=advanced
+  category         String?                  // Optional category for organization
+  expReward        Int                         @default(50) @map("exp_reward")
+  isActive         Boolean                  @default(true) @map("is_active")
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@unique([date])
-  @@map("daily_idiom_challenges")
+  @@index([type])
+  @@index([difficulty])
+  @@index([category])
+  @@map("pronunciation_contents")
+  @@schema("public")
+}
+
+
+model UserPronunciationProgress {
+  id                   Int                     @id @default(autoincrement())
+  userId               String                  @map("user_id") @db.Uuid
+  contentSetId         Int                     @map("content_set_id")
+  totalAttempts        Int                     @default(0) @map("total_attempts")
+  bestScore            Int                     @default(0) @map("best_score")
+  completionStatus     String                  @default("not_started") @map("completion_status") // not_started, in_progress, completed, mastered
+  lastAttemptedAt      DateTime?               @map("last_attempted_at") @db.Timestamptz(6)
+  completedAt          DateTime?               @map("completed_at") @db.Timestamptz(6)
+  contentItemsProgress Json                    @default("[]") @map("content_items_progress") @db.Json // Array of {contentId, bestScore, attempts, completed}
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, contentSetId])
+  @@index([userId])
+  @@index([contentSetId])
+  @@index([completionStatus])
+  @@map("user_pronunciation_progress")
+  @@schema("public")
+}
+
+// Daily game tables
+
+model DailyWordGuess {
+  id                Int                        @id @default(autoincrement())
+  word              String
+  hint              String?
+  definition        String
+  partOfSpeech      String?                    @map("part_of_speech")
+  imageUrl          String?                    @map("image_url")
+  exampleSentence   String?                    @map("example_sentence")
+  difficulty        Int                        @default(1) // 1=easy, 2=medium, 3=hard
+  expReward         Int                        @default(50) @map("exp_reward")
+  activeDate        DateTime                   @map("active_date") @db.Date
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userCompletions   UserDailyGameCompletion[]
+  
+  @@index([activeDate])
+  @@index([difficulty])
+  @@map("daily_word_guess")
   @@schema("public")
 }
 
 model DailySentenceScramble {
-  id              Int       @id @default(autoincrement())
-  date            DateTime  @default(now()) @db.Date
-  sentences       Json      @db.Json // Array of {original, scrambled, hint}
-  difficultyLevel Int       @default(1) @map("difficulty_level")
-  maxAttempts     Int       @default(3) @map("max_attempts")
-  expReward       Int       @default(50) @map("exp_reward")
-
-  @@unique([date])
-  @@map("daily_sentence_scrambles")
+  id                Int                        @id @default(autoincrement())
+  sentence          String
+  scrambledSentence String                     @map("scrambled_sentence")
+  translation       String?
+  hint              String?
+  difficulty        Int                        @default(1) // 1=easy, 2=medium, 3=hard
+  expReward         Int                        @default(50) @map("exp_reward")
+  activeDate        DateTime                   @map("active_date") @db.Date
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userCompletions   UserDailyGameCompletion[]
+  
+  @@index([activeDate])
+  @@index([difficulty])
+  @@map("daily_sentence_scramble")
   @@schema("public")
 }
 
 model DailyWordAssociation {
-  id              Int       @id @default(autoincrement())
-  date            DateTime  @default(now()) @db.Date
-  wordPairs       Json      @db.Json // Array of {word, match}
-  timeLimit       Int       @default(60) @map("time_limit")
-  difficultyLevel Int       @default(1) @map("difficulty_level")
-  expReward       Int       @default(50) @map("exp_reward")
-
-  @@unique([date])
-  @@map("daily_word_associations")
+  id                Int                        @id @default(autoincrement())
+  sourceWord        String                     @map("source_word")
+  targetWords       String[]                   @map("target_words")
+  correctWord       String                     @map("correct_word")
+  hint              String?
+  explanation       String?
+  difficulty        Int                        @default(1) // 1=easy, 2=medium, 3=hard
+  expReward         Int                        @default(50) @map("exp_reward")
+  activeDate        DateTime                   @map("active_date") @db.Date
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userCompletions   UserDailyGameCompletion[]
+  
+  @@index([activeDate])
+  @@index([difficulty])
+  @@map("daily_word_association")
   @@schema("public")
 }
 
-model DailyWordGuess {
-  id              Int       @id @default(autoincrement())
-  date            DateTime  @default(now()) @db.Date
-  word            String
-  clues           Json      @db.Json // Array of clue strings
-  maxAttempts     Int       @default(6) @map("max_attempts")
-  difficultyLevel Int       @default(1) @map("difficulty_level")
-  expReward       Int       @default(50) @map("exp_reward")
-
-  @@unique([date])
-  @@map("daily_word_guesses")
+model DailyIdiomChallenge {
+  id                Int                          @id @default(autoincrement())
+  idiom             String
+  meaning           String
+  literalMeaning    String?                      @map("literal_meaning")
+  exampleSentence   String?                      @map("example_sentence")
+  options           String[]
+  correctOption     String                       @map("correct_option")
+  hint              String?
+  difficulty        Int                          @default(1) // 1=easy, 2=medium, 3=hard
+  expReward         Int                          @default(50) @map("exp_reward")
+  activeDate        DateTime                     @map("active_date") @db.Date
+  createdAt         DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userCompletions   UserDailyGameCompletion[]    
+  
+  @@index([activeDate])
+  @@index([difficulty])
+  @@map("daily_idiom_challenge")
   @@schema("public")
 }
 
-model UserGameResult {
-  id             Int      @id @default(autoincrement())
-  userId         String   @map("user_id") @db.Uuid
-  gameId         Int      @map("game_id") // References the specific game's ID (DailyIdiomChallenge.id, etc.)
-  gameType       String   @map("game_type") // Can be "daily", "vocabulary", "grammar", etc.
-  gameSubtype    String   @map("game_subtype") // Like "idiom-challenge", "sentence-scramble", etc.
-  score          Int      @default(0)
-  accuracy       Decimal? @db.Decimal(5, 2)
-  timeTaken      Int?     @map("time_taken") // in seconds
-  level          Int      @default(1)
-  attemptsUsed   Int?     @map("attempts_used") // For tracking number of attempts
-  itemsCompleted Int?     @map("items_completed") // For tracking completed items (sentences, words, pairs)
-  details        Json?    @db.Json // Flexible field for game-specific data like userAnswers, guesses
-  correct        Int      @default(0)
-  incorrect      Int      @default(0)
-  completed      Boolean  @default(false)
-  completedAt    DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
-  xpEarned       Int      @default(0) @map("xp_earned")
-  user           User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+model UserDailyGameCompletion {
+  id                Int                   @id @default(autoincrement())
+  userId            String                @map("user_id") @db.Uuid
+  gameDate          DateTime              @map("game_date") @db.Date
+  gameType          String                @map("game_type") // "word-guess", "sentence-scramble", "word-association", "idiom-challenge"
+  wordGuessId       Int?                  @map("word_guess_id")
+  sentenceScrambleId Int?                 @map("sentence_scramble_id")
+  wordAssociationId Int?                  @map("word_association_id")
+  idiomChallengeId  Int?                  @map("idiom_challenge_id") 
+  completed         Boolean               @default(false)
+  score             Int?
+  timeTaken         Int?                  @map("time_taken") // in seconds
+  attempts          Int                   @default(1)
+  expEarned         Int?                  @map("exp_earned")
+  completedAt       DateTime?             @map("completed_at") @db.Timestamptz(6)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  user              User                  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  wordGuess         DailyWordGuess?       @relation(fields: [wordGuessId], references: [id], onDelete: SetNull)
+  sentenceScramble  DailySentenceScramble? @relation(fields: [sentenceScrambleId], references: [id], onDelete: SetNull)
+  wordAssociation   DailyWordAssociation? @relation(fields: [wordAssociationId], references: [id], onDelete: SetNull)
+  idiomChallenge    DailyIdiomChallenge?  @relation(fields: [idiomChallengeId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, gameId, gameType, gameSubtype, completedAt(sort: Desc)])
+  @@unique([userId, gameDate, gameType])
   @@index([userId])
   @@index([gameType])
-  @@index([gameSubtype])
+  @@index([gameDate])
   @@index([completedAt])
-  @@map("user_game_results")
+  @@index([wordGuessId])
+  @@index([sentenceScrambleId])
+  @@index([wordAssociationId])
+  @@index([idiomChallengeId])
+  @@map("user_daily_game_completions")
   @@schema("public")
 }
+
+

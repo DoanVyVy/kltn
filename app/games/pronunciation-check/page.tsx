@@ -33,6 +33,11 @@ import {
 // Using Volume2 for VolumeUp, and Activity for Waveform
 import { Button } from "@/components/ui/button";
 import {
+  PronunciationContent,
+  PronunciationFeedback,
+  TranscriptionResult,
+} from "@/types/pronunciation";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -46,12 +51,6 @@ import { Progress } from "@/components/ui/progress";
 import Navigation from "@/components/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { trpc } from "@/trpc/client";
-import {
-  PronunciationContent,
-  PronunciationFeedback,
-  TranscriptionResult,
-  WordAnalysis,
-} from "@/types/pronunciation";
 
 // Audio processing utilities
 const audioContext =
@@ -148,69 +147,74 @@ export default function PronunciationCheckGame() {
 
   // Timer interval ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sample content for testing - this would come from API in production
-  const sampleContents: PronunciationContent[] = [
-    {
-      id: 1,
-      type: "word",
-      content: "Vocabulary",
-      audioUrl: "/audio/vocabulary.mp3",
-      translation: "Từ vựng",
-    },
-    {
-      id: 2,
-      type: "sentence",
-      content: "Learning English requires consistent practice.",
-      audioUrl: "/audio/sentence1.mp3",
-      translation: "Học tiếng Anh đòi hỏi thực hành đều đặn.",
-    },
-    {
-      id: 3,
-      type: "paragraph",
-      content:
-        "The more you practice speaking, the more confident you will become.",
-      audioUrl: "/audio/paragraph1.mp3",
-      translation:
-        "Bạn càng luyện tập nói nhiều, bạn sẽ càng trở nên tự tin hơn.",
-    },
-  ];
-
+  // Không còn sử dụng dữ liệu mẫu, chỉ sử dụng dữ liệu từ database
   // Game data fetching
   const {
     data: gameData,
     isLoading: isLoadingGameData,
     isError: isErrorGameData,
-  } = trpc.games.getPronunciationGame.useQuery(undefined, {
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    retry: 1, // Only retry once
-    onSuccess: (data) => {
-      if (data?.content) {
-        setPronunciationContents(data.content);
-      } else {
-        setPronunciationContents(sampleContents);
-      }
-      setIsLoading(false);
+  } = trpc.games.getPronunciationGame.useQuery(
+    {
+      limit: 15,
+      difficulty: difficultyLevel,
     },
-    onError: () => {
-      console.log("Error fetching game data, using sample content");
-      setPronunciationContents(sampleContents);
-      setIsLoading(false);
-    },
-  });
+    {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 2, // Retry twice
+      onSuccess: (data) => {
+        if (data?.content && data.content.length > 0) {
+          console.log(
+            `Received ${data.content.length} pronunciation content items`
+          );
+          setPronunciationContents(data.content);
+          setIsLoading(false);
+        } else {
+          toast({
+            title: "Lỗi",
+            description:
+              "Không tìm thấy dữ liệu phát âm. Vui lòng thử lại sau.",
+            variant: "destructive",
+          });
+          console.error("No pronunciation content data available");
+          setIsLoading(false);
+        }
+      },
+      onError: (error) => {
+        console.error("Error fetching game data:", error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải dữ liệu phát âm. Vui lòng thử lại sau.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+      },
+    }
+  );
 
-  // Force loading to end after 5 seconds even if API is still loading
+  // Force loading to end after 8 seconds even if API is still loading
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isLoading) {
         console.log("Force ending loading state after timeout");
-        setPronunciationContents(sampleContents);
         setIsLoading(false);
+        toast({
+          title: "Tải dữ liệu quá lâu",
+          description:
+            "Không thể tải dữ liệu phát âm. Vui lòng kiểm tra kết nối mạng và thử lại.",
+          variant: "destructive",
+        });
       }
-    }, 5000); // 5 seconds timeout
+    }, 8000); // 8 seconds timeout
 
     return () => clearTimeout(timer);
   }, [isLoading]);
+
+  useEffect(() => {
+    if (gameData?.content) {
+      setPronunciationContents(gameData.content);
+      setIsLoading(false);
+    }
+  }, [gameData]);
 
   // User stats fetching
   const { data: userStats } = trpc.userProcess.getGameStats.useQuery(
@@ -331,7 +335,7 @@ export default function PronunciationCheckGame() {
     } else if (isRedirecting && redirectCountdown === 0) {
       router.push("/games");
     }
-  }, [isRedirecting, redirectCountdown, router]);  // Toggle realistic transcription mode
+  }, [isRedirecting, redirectCountdown, router]); // Toggle realistic transcription mode
   const toggleRealisticTranscription = () => {
     setUseRealisticTranscription(!useRealisticTranscription);
     toast({
@@ -349,9 +353,17 @@ export default function PronunciationCheckGame() {
 
   const playOriginalAudio = () => {
     if (!audioRef.current) return;
-
     const content = pronunciationContents[currentContentIndex];
-    if (content?.audioUrl) {
+    if (!content) {
+      toast({
+        title: "Content not available",
+        description: "Unable to play audio for this content",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (content.audioUrl) {
       audioRef.current.src = content.audioUrl;
       audioRef.current.play();
     } else {
@@ -368,9 +380,20 @@ export default function PronunciationCheckGame() {
     audioRef.current.src = userAudioUrl;
     audioRef.current.play();
   };
-
   const startRecording = async () => {
     try {
+      // Clear current feedback and transcription when starting a new recording
+      setCurrentFeedback(null);
+      setTranscriptionResult(null);
+
+      // Clear any cached audio data or feedback
+      const currentContent = getCurrentContent();
+      if (currentContent) {
+        const cacheKey = `${currentContent.content}_${difficultyLevel}_${selectedLanguage}`;
+        pronunciationCache.delete(cacheKey);
+        console.log("Cleared cached pronunciation feedback before recording");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
 
@@ -436,7 +459,8 @@ export default function PronunciationCheckGame() {
     mediaRecorderRef.current.stream
       .getTracks()
       .forEach((track) => track.stop());
-  };  const transcribeAudio = async () => {
+  };
+  const transcribeAudio = async () => {
     if (!audioBlob) return;
 
     setIsTranscribing(true);
@@ -444,18 +468,23 @@ export default function PronunciationCheckGame() {
     try {
       // Get the current content to use as the reference text
       const currentContent = pronunciationContents[currentContentIndex];
+      if (!currentContent) {
+        throw new Error("No content available to transcribe");
+      }
       const promptText = currentContent.content;
-      
+
       // Import the pronunciation service dynamically
-      const pronunciationService = (await import('@/services/pronunciation-service')).default;
-      
+      const pronunciationService = (
+        await import("@/services/pronunciation-service")
+      ).default;
+
       // Use the pronunciation service's analyzePronunciation method
       // which will handle audio processing and return analysis with transcription
       const analysisResult = await pronunciationService.analyzePronunciation(
         audioBlob,
         promptText
       );
-      
+
       // Create a transcription result using the transcribed text from analysis
       // If no transcribed text is available, fall back to the prompt text
       const transcript = analysisResult.transcribedText || promptText;
@@ -463,11 +492,11 @@ export default function PronunciationCheckGame() {
         transcript: transcript,
         confidence: 0.9, // We don't get a confidence score from the service
         success: true,
-        source: "pronunciation-api"
+        source: "pronunciation-api",
       };
-      
+
       setTranscriptionResult(result);
-      
+
       toast({
         title: "Transcription Complete",
         description: "Your speech has been processed and analyzed",
@@ -479,73 +508,78 @@ export default function PronunciationCheckGame() {
         title: "Transcription Error",
         description: "Could not transcribe your audio. Please try again.",
         variant: "destructive",
-      });
-      
-      // Create a fallback transcription using the reference text
-      const fallbackTranscript = pronunciationContents[currentContentIndex].content;
+      }); // Create a fallback transcription using the reference text
+      const currentContent = pronunciationContents[currentContentIndex];
+      const fallbackTranscript = currentContent
+        ? currentContent.content
+        : "No content available";
       const fallbackResult: TranscriptionResult = {
         transcript: fallbackTranscript,
         confidence: 0.5,
         success: false,
-        source: "fallback"
+        source: "fallback",
       };
       setTranscriptionResult(fallbackResult);
     } finally {
       setIsTranscribing(false);
     }
-  };  const evaluatePronunciation = async () => {
+  };
+  const evaluatePronunciation = async () => {
     if (!audioBlob) return;
 
     setIsProcessing(true);
 
     try {
       // Import the pronunciation service dynamically
-      const pronunciationService = (await import('@/services/pronunciation-service')).default;
-      
+      const pronunciationService = (
+        await import("@/services/pronunciation-service")
+      ).default;
       const currentContent = pronunciationContents[currentContentIndex];
-      
+
+      // Check if content exists
+      if (!currentContent) {
+        throw new Error("No content available to evaluate");
+      }
+
       // Create a fallback transcription if needed
       if (!transcriptionResult) {
         const fallbackTranscription: TranscriptionResult = {
           transcript: currentContent.content, // Use reference text as fallback
           confidence: 0.8,
           success: true,
-          source: "simplified-fallback"
+          source: "simplified-fallback",
         };
         setTranscriptionResult(fallbackTranscription);
       }
-      
+
       // Use either existing transcript or fallback to reference text
-      const transcribedText = transcriptionResult?.transcript || currentContent.content;
-      
+      const transcribedText =
+        transcriptionResult?.transcript || currentContent.content;
+
       console.log(
         "Đang đánh giá phát âm với văn bản tham chiếu:",
         transcribedText
       );
-
       const textToEvaluate = currentContent.content;
       const cacheKey = `${textToEvaluate}_${difficultyLevel}_${selectedLanguage}`;
-
       let feedback: PronunciationFeedback | null = null;
 
-      if (pronunciationCache.has(cacheKey)) {
-        feedback = pronunciationCache.get(cacheKey)!;
-        console.log("Using cached pronunciation feedback");
-      } else {
-        try {
-          // Pass the raw audio blob to the pronunciation service
-          // The service will handle audio processing internally
-          feedback = await pronunciationService.analyzePronunciation(
-            audioBlob,
-            textToEvaluate
-          );
+      // Always perform a new assessment when "try again" is used
+      // Never use cached feedback to ensure we get fresh Gemini API feedback
+      const isRetry = attemptsLeft < 3;
+      console.log(`Is retry attempt: ${isRetry}, always using new assessment`);
 
-          // Save result to cache
-          pronunciationCache.set(cacheKey, feedback);
-        } catch (error) {
-          console.error("API call failed:", error);
-          throw error;
-        }
+      try {
+        console.log("Performing new pronunciation assessment");
+        // Pass the raw audio blob to the pronunciation service
+        // The service will handle audio processing internally
+        feedback = await pronunciationService.analyzePronunciation(
+          audioBlob,
+          textToEvaluate
+        );
+      } catch (error) {
+        console.error("API call failed:", error);
+        throw error;
       }
 
       if (!feedback) {
@@ -574,12 +608,9 @@ export default function PronunciationCheckGame() {
         });
         setPhoneticGuides(newPhoneticGuides);
       }
-
       const isSuccess = feedback.overall >= 75;
 
       if (isSuccess) {
-        setGameWon(true);
-        setGameOver(true);
         setMessage("Excellent pronunciation! You've completed this challenge.");
 
         addExperienceMutation.mutate({ amount: 50, source: "practice_game" });
@@ -590,8 +621,9 @@ export default function PronunciationCheckGame() {
         });
 
         setTimeout(() => {
-          setIsRedirecting(true);
-        }, 3000);
+          // Move to the next content instead of redirecting
+          moveToNextContent();
+        }, 60000);
       } else {
         const remaining = attemptsLeft - 1;
         setAttemptsLeft(remaining);
@@ -614,7 +646,8 @@ export default function PronunciationCheckGame() {
     } finally {
       setIsProcessing(false);
     }
-  };  const analyzeWithDirectAPI = async () => {
+  };
+  const analyzeWithDirectAPI = async () => {
     if (!audioBlob) {
       toast({
         title: "Không có bản ghi âm",
@@ -627,11 +660,16 @@ export default function PronunciationCheckGame() {
 
     try {
       const currentContent = pronunciationContents[currentContentIndex];
+      if (!currentContent) {
+        throw new Error("No content available to analyze");
+      }
       const promptText = currentContent.content;
 
       // Import the pronunciation service dynamically
-      const pronunciationService = (await import('@/services/pronunciation-service')).default;
-      
+      const pronunciationService = (
+        await import("@/services/pronunciation-service")
+      ).default;
+
       // Send the raw audio blob directly to the pronunciation service
       // The service will handle audio processing internally
       const analysisResult = await pronunciationService.analyzePronunciation(
@@ -647,18 +685,18 @@ export default function PronunciationCheckGame() {
       // Set feedback and update state
       setCurrentFeedback(feedback);
       setFeedbacks([...feedbacks, feedback]);
-      
+
       // Create a transcription result using the feedback's transcribed text
       if (!transcriptionResult) {
         const transcription: TranscriptionResult = {
           transcript: feedback.transcribedText || promptText,
           confidence: 0.9,
           success: true,
-          source: "pronunciation-service"
+          source: "pronunciation-service",
         };
         setTranscriptionResult(transcription);
       }
-      
+
       toast({
         title: "Phân tích hoàn tất",
         description: "Đã phân tích phát âm của bạn thành công.",
@@ -784,9 +822,8 @@ export default function PronunciationCheckGame() {
 
     return phonetic;
   };
-
   const renderWordComparison = () => {
-    if (!currentFeedback || !transcriptionResult) {
+    if (!currentFeedback || !transcriptionResult || !currentContent) {
       return (
         <div className="text-gray-500 italic">
           Text comparison not available
@@ -870,10 +907,29 @@ export default function PronunciationCheckGame() {
       </div>
     );
   };
-
   const resetGame = () => {
     resetStates();
     setAttemptsLeft(3);
+    // Clear any cached pronunciation feedback for the current content
+    const currentContent = getCurrentContent();
+    if (currentContent) {
+      // Clear all related cache entries to ensure fresh feedback
+      const cacheKey = `${currentContent.content}_${difficultyLevel}_${selectedLanguage}`;
+      pronunciationCache.delete(cacheKey);
+
+      // Also clear any other cache entries for this content (with different difficulty/language)
+      pronunciationCache.forEach((value, key) => {
+        if (key.includes(currentContent.content)) {
+          pronunciationCache.delete(key);
+        }
+      });
+
+      console.log("Pronunciation cache cleared for current content");
+    }
+
+    // Reset feedback and transcription
+    setCurrentFeedback(null);
+    setTranscriptionResult(null);
   };
 
   const renderWaveform = () => {
@@ -999,16 +1055,17 @@ export default function PronunciationCheckGame() {
 
     return pronunciationContents[currentContentIndex];
   };
-
   const moveToNextContent = () => {
     if (currentContentIndex < pronunciationContents.length - 1) {
       setCurrentContentIndex(currentContentIndex + 1);
       resetStates();
     } else {
-      // End of game
+      // End of game - completed all content
       setGameOver(true);
       setGameWon(true);
-      setMessage("You've completed all pronunciation challenges!");
+      setMessage(
+        "Congratulations! You've completed all pronunciation challenges!"
+      );
 
       // Award XP if not already awarded
       if (!gameWon) {
@@ -1218,69 +1275,47 @@ export default function PronunciationCheckGame() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
+                    {" "}
                     <CardTitle>Pronunciation Challenge</CardTitle>
                     <CardDescription className="text-game-accent/70">
-                      {currentContent.type === "word"
+                      {currentContent && currentContent.type === "word"
                         ? "Pronounce this word correctly"
-                        : currentContent.type === "sentence"
+                        : currentContent && currentContent.type === "sentence"
                         ? "Read this sentence with natural intonation"
-                        : "Read this paragraph with clarity and fluency"}
+                        : currentContent
+                        ? "Read this paragraph with clarity and fluency"
+                        : "Loading content..."}
                     </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="text-sm bg-blue-50 text-blue-700 rounded-md px-2 py-1 border border-blue-100"
-                      value={selectedLanguage}
-                      onChange={(e) => setSelectedLanguage(e.target.value)}
-                    >
-                      <option value="en">English</option>
-                      <option value="vi">Tiếng Việt</option>
-                      <option value="auto">Auto-detect</option>
-                    </select>
-                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-none">
-                      {currentContent.type === "word"
-                        ? "Word"
-                        : currentContent.type === "sentence"
-                        ? "Sentence"
-                        : "Paragraph"}
-                    </Badge>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-6">
-                {/* Content to pronounce */}
+                {/* Content to pronounce */}{" "}
                 <motion.div
                   className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-center"
                   variants={itemVariants}
                 >
                   <h3 className="text-xl md:text-2xl font-medium text-game-accent mb-2">
-                    {currentContent.content}
+                    {currentContent
+                      ? currentContent.content
+                      : "Loading content..."}
                   </h3>
-                  {currentContent.translation && (
+                  {currentContent && currentContent.translation && (
                     <p className="text-sm text-game-accent/70">
                       {currentContent.translation}
                     </p>
+                  )}{" "}
+                  {currentContent && (
+                    <motion.div
+                      className="mt-4"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    ></motion.div>
                   )}
-                  <motion.div
-                    className="mt-4"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Button
-                      variant="outline"
-                      className="rounded-full border-blue-200 text-blue-700 hover:bg-blue-100"
-                      onClick={playOriginalAudio}
-                    >
-                      <Volume2 className="mr-2 h-4 w-4" />
-                      Listen to correct pronunciation
-                    </Button>
-                  </motion.div>
                 </motion.div>
-
                 {/* Display waveform when available */}
                 {showWaveform && renderWaveform()}
-
                 {/* Transcription result */}
                 <AnimatePresence>
                   {transcriptionResult && !isProcessing && !currentFeedback && (
@@ -1314,7 +1349,6 @@ export default function PronunciationCheckGame() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-
                 {/* Recording controls */}
                 {!gameOver && !currentFeedback && (
                   <motion.div
@@ -1393,66 +1427,22 @@ export default function PronunciationCheckGame() {
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                           >
+                            {" "}
                             <Button
                               variant="outline"
                               className="rounded-full border-game-primary/20"
-                              onClick={startRecording}
+                              onClick={() => {
+                                // Clear any cached result for the current content before re-recording
+                                const currentContent = getCurrentContent();
+                                if (currentContent) {
+                                  const cacheKey = `${currentContent.content}_${difficultyLevel}_${selectedLanguage}`;
+                                  pronunciationCache.delete(cacheKey);
+                                }
+                                startRecording();
+                              }}
                             >
                               <RefreshCw className="mr-2 h-4 w-4" />
                               Re-record
-                            </Button>
-                          </motion.div>
-
-                          <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <Button
-                              variant="outline"
-                              className="rounded-full border-game-primary/20"
-                              onClick={transcribeAudio}
-                              disabled={isTranscribing || !!transcriptionResult}
-                            >
-                              {isTranscribing ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Transcribing...
-                                </>
-                              ) : transcriptionResult ? (
-                                <>
-                                  <Check className="mr-2 h-4 w-4 text-green-500" />
-                                  Transcribed
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  Transcribe audio
-                                </>
-                              )}
-                            </Button>
-                          </motion.div>
-
-                          <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <Button
-                              variant="outline"
-                              className="rounded-full border-game-primary/20"
-                              onClick={analyzeWithDirectAPI}
-                              disabled={isProcessing}
-                            >
-                              {isProcessing ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Analyzing...
-                                </>
-                              ) : (
-                                <>
-                                  <BarChart3 className="mr-2 h-4 w-4" />
-                                  Analyze with API
-                                </>
-                              )}
                             </Button>
                           </motion.div>
                         </div>
@@ -1482,7 +1472,6 @@ export default function PronunciationCheckGame() {
                     )}
                   </motion.div>
                 )}
-
                 {/* Feedback display */}
                 <AnimatePresence>
                   {currentFeedback && (
@@ -1514,8 +1503,7 @@ export default function PronunciationCheckGame() {
                             </span>
                           </div>
                         </div>
-                      </div>
-
+                      </div>{" "}
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-gray-50 rounded-xl p-4 text-center">
                           <h4 className="text-sm font-medium text-gray-500 mb-2">
@@ -1577,30 +1565,63 @@ export default function PronunciationCheckGame() {
                           </div>
                         </div>
                       </div>
-
-                      {/* Text comparison */}
-                      <Card className="border border-gray-200">
-                        <CardHeader className="py-3">
+                      {/* Voice Metrics - Pitch & Energy */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div className="bg-blue-50 rounded-xl p-4">
+                          <h4 className="text-sm font-medium text-gray-600 mb-2 flex items-center">
+                            <Volume2 className="h-4 w-4 mr-2 text-blue-500" />
+                            Pitch Mean
+                          </h4>
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">
-                              Text Comparison
-                            </CardTitle>
-                            <div className="flex items-center gap-1">
-                              <Badge className="bg-green-100 text-green-700 border-none">
-                                Correct
-                              </Badge>
-                              <Badge className="bg-yellow-100 text-yellow-700 border-none">
-                                Added
-                              </Badge>
-                              <Badge className="bg-red-100 text-red-700 border-none">
-                                Missed
+                            <span className="text-2xl font-medium text-blue-600">
+                              {currentFeedback.pitchMean?.toFixed(2) || "N/A"}{" "}
+                              Hz
+                            </span>
+                            <div className="bg-white p-2 rounded-lg">
+                              <Badge className="bg-blue-100 text-blue-700 border-none">
+                                {currentFeedback.pitchMean &&
+                                currentFeedback.pitchMean > 180
+                                  ? "High pitch"
+                                  : currentFeedback.pitchMean &&
+                                    currentFeedback.pitchMean > 120
+                                  ? "Normal pitch"
+                                  : "Low pitch"}
                               </Badge>
                             </div>
                           </div>
-                        </CardHeader>
-                        <CardContent>{renderWordComparison()}</CardContent>
-                      </Card>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Average pitch of your voice. Optimal range varies by
+                            gender/age.
+                          </p>
+                        </div>
 
+                        <div className="bg-purple-50 rounded-xl p-4">
+                          <h4 className="text-sm font-medium text-gray-600 mb-2 flex items-center">
+                            <Activity className="h-4 w-4 mr-2 text-purple-500" />
+                            Energy Mean
+                          </h4>
+                          <div className="flex items-center justify-between">
+                            <span className="text-2xl font-medium text-purple-600">
+                              {currentFeedback.energyMean?.toFixed(4) || "N/A"}
+                            </span>
+                            <div className="bg-white p-2 rounded-lg">
+                              <Badge className="bg-purple-100 text-purple-700 border-none">
+                                {currentFeedback.energyMean &&
+                                currentFeedback.energyMean > 0.025
+                                  ? "Strong voice"
+                                  : currentFeedback.energyMean &&
+                                    currentFeedback.energyMean > 0.01
+                                  ? "Average volume"
+                                  : "Low volume"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Voice loudness/intensity. Higher values indicate
+                            stronger pronunciation.
+                          </p>
+                        </div>
+                      </div>
                       {/* Word Analysis (collapsible) */}
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div
@@ -1637,7 +1658,6 @@ export default function PronunciationCheckGame() {
                           </div>
                         )}
                       </div>
-
                       <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
                         <h4 className="font-medium text-blue-700 mb-2 flex items-center">
                           <AlertCircle className="mr-2 h-4 w-4" />
@@ -1654,8 +1674,207 @@ export default function PronunciationCheckGame() {
                           ))}
                         </ul>
                       </div>
+                      {/* Phoneme Analysis Section */}
+                      {currentFeedback.expectedPhonemes &&
+                        currentFeedback.expectedPhonemes.length > 0 && (
+                          <Card className="border border-gray-200 mt-4">
+                            <CardHeader className="py-3">
+                              <CardTitle className="text-base flex items-center">
+                                <BadgeHelp className="h-4 w-4 mr-2 text-amber-500" />
+                                Phoneme Analysis
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="ml-2 text-xs h-6 hover:bg-amber-50"
+                                  onClick={() => {
+                                    toast({
+                                      title: "Phoneme Analysis",
+                                      description:
+                                        "Phonemes are the smallest units of sound that distinguish one word from another. This analysis compares the expected phonemes with what you actually pronounced.",
+                                      variant: "default",
+                                    });
+                                  }}
+                                >
+                                  What's this?
+                                </Button>
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <h4 className="text-sm font-medium text-gray-500 mb-2">
+                                      Expected Phonemes
+                                    </h4>
+                                    <div className="bg-gray-50 rounded-lg p-3 min-h-[80px] flex flex-wrap gap-1 border border-gray-100">
+                                      {currentFeedback.expectedPhonemes?.map(
+                                        (phoneme, index) => (
+                                          <Badge
+                                            key={`exp-${index}`}
+                                            variant="outline"
+                                            className="bg-blue-50 text-blue-700 border-blue-100"
+                                          >
+                                            {phoneme}
+                                          </Badge>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-sm font-medium text-gray-500 mb-2">
+                                      Your Phonemes
+                                    </h4>
+                                    <div className="bg-gray-50 rounded-lg p-3 min-h-[80px] flex flex-wrap gap-1 border border-gray-100">
+                                      {currentFeedback.userPhonemes?.map(
+                                        (phoneme, index) => (
+                                          <Badge
+                                            key={`user-${index}`}
+                                            variant="outline"
+                                            className={
+                                              currentFeedback.correctPhonemes?.includes(
+                                                phoneme
+                                              )
+                                                ? "bg-green-50 text-green-700 border-green-100"
+                                                : "bg-red-50 text-red-700 border-red-100"
+                                            }
+                                          >
+                                            {phoneme}
+                                          </Badge>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-sm font-medium text-gray-500 mb-2">
+                                      Correct Phonemes
+                                    </h4>
+                                    <div className="bg-gray-50 rounded-lg p-3 min-h-[80px] flex flex-wrap gap-1 border border-gray-100">
+                                      {currentFeedback.correctPhonemes?.map(
+                                        (phoneme, index) => (
+                                          <Badge
+                                            key={`corr-${index}`}
+                                            variant="outline"
+                                            className="bg-green-50 text-green-700 border-green-100"
+                                          >
+                                            {phoneme}
+                                          </Badge>
+                                        )
+                                      )}
+                                      {currentFeedback.correctPhonemes &&
+                                        currentFeedback.expectedPhonemes &&
+                                        currentFeedback.correctPhonemes
+                                          .length === 0 && (
+                                          <span className="text-gray-400 italic text-sm">
+                                            No correct phonemes detected
+                                          </span>
+                                        )}
+                                    </div>
+                                  </div>
+                                </div>
 
-                      <div className="flex justify-center space-x-4">
+                                {currentFeedback.mistakes &&
+                                  currentFeedback.mistakes.length > 0 && (
+                                    <div>
+                                      <h4 className="text-sm font-medium text-gray-500 mb-2">
+                                        Pronunciation Errors
+                                      </h4>
+                                      <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                                        <table className="w-full text-sm">
+                                          <thead>
+                                            <tr className="text-left text-gray-500">
+                                              <th className="p-2">Position</th>
+                                              <th className="p-2">Expected</th>
+                                              <th className="p-2">You said</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {currentFeedback.mistakes.map(
+                                              (mistake, index) => (
+                                                <tr
+                                                  key={`mistake-${index}`}
+                                                  className="border-t border-red-200"
+                                                >
+                                                  <td className="p-2">
+                                                    {mistake.position + 1}
+                                                  </td>
+                                                  <td className="p-2">
+                                                    <Badge className="bg-blue-100 text-blue-700 border-none">
+                                                      {mistake.expected}
+                                                    </Badge>
+                                                  </td>
+                                                  <td className="p-2">
+                                                    <Badge className="bg-red-100 text-red-700 border-none">
+                                                      {mistake.actual}
+                                                    </Badge>
+                                                  </td>
+                                                </tr>
+                                              )
+                                            )}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      {/* Phoneme Explainer - Help users understand phoneme analysis */}
+                      {currentFeedback.expectedPhonemes &&
+                        currentFeedback.expectedPhonemes.length > 0 && (
+                          <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mt-2">
+                            <div className="flex items-start">
+                              <BadgeHelp className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+                              <div>
+                                <h4 className="font-medium text-amber-800 mb-1">
+                                  Understanding Phoneme Analysis
+                                </h4>
+                                <div className="text-sm text-amber-700">
+                                  <p className="mb-1">
+                                    Phonemes are distinct units of sound in a
+                                    language. Improving your pronunciation means
+                                    getting better at producing the correct
+                                    phonemes.
+                                  </p>
+                                  <ul className="list-disc list-inside space-y-1 text-xs">
+                                    <li>
+                                      <span className="font-medium">
+                                        Expected phonemes
+                                      </span>
+                                      : The sounds you should make for perfect
+                                      pronunciation
+                                    </li>
+                                    <li>
+                                      <span className="font-medium">
+                                        Your phonemes
+                                      </span>
+                                      : The sounds we detected in your speech
+                                    </li>
+                                    <li>
+                                      <span className="font-medium">
+                                        Correct phonemes
+                                      </span>
+                                      : The sounds you pronounced correctly
+                                    </li>
+                                    <li>
+                                      <span className="font-medium">
+                                        Pitch &amp; Energy
+                                      </span>
+                                      : Your voice characteristics that affect
+                                      how natural you sound
+                                    </li>
+                                  </ul>
+                                  <p className="mt-2 text-xs">
+                                    Focus on the mistakes highlighted in red and
+                                    try to match the expected phonemes for
+                                    better scores.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      <div className="flex justify-center space-x-4 mt-4">
                         {!gameOver && (
                           <motion.div
                             whileHover={{ scale: 1.05 }}
@@ -1688,7 +1907,6 @@ export default function PronunciationCheckGame() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-
                 {/* Message alert */}
                 <AnimatePresence>
                   {message && (
@@ -1725,10 +1943,15 @@ export default function PronunciationCheckGame() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
+                    {" "}
                     <Button
                       variant="outline"
                       className="border-game-primary/20 text-game-accent hover:bg-game-primary/10 rounded-full"
-                      onClick={resetGame}
+                      onClick={() => {
+                        resetGame();
+                        // Start recording immediately after reset
+                        setTimeout(() => startRecording(), 100);
+                      }}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Try Again

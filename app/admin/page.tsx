@@ -14,13 +14,12 @@ import {
   GrammarManagement,
   UserManagement,
 } from "@/components/admin";
-import AdminDashboard from "@/components/admin/admin-dashboard";
 import CourseManagement from "@/components/admin/course-management/index";
 import GameDataManagement from "@/components/admin/game-data-management";
+import GameManagement from "@/components/admin/game-management/GameManagement";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
-
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
@@ -41,12 +40,12 @@ export default function AdminPage() {
           </TabsTrigger>
           <TabsTrigger value="courses" className="gap-2">
             <GraduationCap size={16} />
-            <span className="hidden md:inline">Khóa học</span>
+            <span className="hidden md:inline">Cấp độ</span>
           </TabsTrigger>
           <TabsTrigger value="vocabulary" className="gap-2">
             <BookOpen size={16} />
             <span className="hidden md:inline">Từ vựng</span>
-          </TabsTrigger>
+          </TabsTrigger>{" "}
           <TabsTrigger value="grammar" className="gap-2">
             <BookOpen size={16} />
             <span className="hidden md:inline">Ngữ pháp</span>
@@ -55,26 +54,28 @@ export default function AdminPage() {
             <GamepadIcon size={16} />
             <span className="hidden md:inline">Trò chơi</span>
           </TabsTrigger>
+          <TabsTrigger value="dailyGames" className="gap-2">
+            <GamepadIcon size={16} />
+            <span className="hidden md:inline">Trò chơi hàng ngày</span>
+          </TabsTrigger>
         </TabsList>
-
         <TabsContent value="users">
           <UserManagement />
         </TabsContent>
-
         <TabsContent value="courses">
           <CourseManagement />
-        </TabsContent>
-
+        </TabsContent>{" "}
         <TabsContent value="vocabulary">
           <VocabularyManagement />
         </TabsContent>
-
         <TabsContent value="grammar">
           <GrammarManagement />
         </TabsContent>
-
         <TabsContent value="games">
           <GameDataManagement />
+        </TabsContent>
+        <TabsContent value="dailyGames">
+          <GameManagement />
         </TabsContent>
       </Tabs>
     </div>
